@@ -122,7 +122,7 @@ with st.sidebar:
             del st.session_state.creds
             st.rerun()
 
-# --- MAIN SCREEN: CHAT INTERFACE ---
+# --- MAIN SCREEN ---
 st.title("🧮 Math Assistant")
 
 # Check if API key is present
@@ -132,11 +132,11 @@ else:
     # Initialize Gemini client
     client = genai.Client(api_key=st.session_state.api_key)
 
-    # Create two-column layout
-    chat_col, html_col = st.columns([3, 2], gap="small")
+    # Create tabs for different functionalities
+    tab1, tab2, tab3 = st.tabs(["💬 Chat", "📊 Google Slides Manager", "🐛 Debug"])
     
-    # --- LEFT COLUMN: CHAT INTERFACE ---
-    with chat_col:
+    # --- TAB 1: CHAT INTERFACE ---
+    with tab1:
         # Display chat history
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -194,8 +194,8 @@ else:
                 except Exception as e:
                     st.error(f"API Error: {e}")
     
-    # --- RIGHT COLUMN: SLIDES MANAGEMENT ---
-    with html_col:
+    # --- TAB 2: GOOGLE SLIDES MANAGEMENT ---
+    with tab2:
         st.subheader("Google Slides Manager")
         
         # Slide Presentation ID Input
@@ -239,54 +239,54 @@ else:
             
             st.divider()
             
-            # Create tabs for each slide
-            slides_to_remove = []
-            
-            for slide in st.session_state.slides_data:
-                slide_index = slide["index"]
-                
-                with st.expander(f"Slide {slide_index + 1}", expanded=False):
-                    # Display slide thumbnail
-                    if slide.get("png_base64"):
-                        try:
-                            # Decode base64 image and display
-                            # image_data = base64.b64decode(slide["png_base64"])
-                            image_html = f"<img src='{slide['png_base64']}' style='width:100%; height:auto;' />"
-                            st.markdown(image_html, unsafe_allow_html=True)
-                        except Exception as e:
-                            st.warning(f"Could not display thumbnail: {e}")
-                    
-                    # Edit speaker notes
-                    st.markdown("**Speaker Notes:**")
-                    new_notes = st.text_area(
-                        "Edit notes:",
-                        value=slide.get("notes", ""),
-                        height=150,
-                        key=f"notes_{slide_index}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    # Update notes in session state if changed
-                    if new_notes != slide.get("notes", ""):
-                        st.session_state.slides_data[slide_index]["notes"] = new_notes
-                    
-                    # Button to mark slide for removal
-                    col1, col2 = st.columns([3, 1])
-                    with col2:
-                        if st.button("🗑️ Remove", key=f"remove_{slide_index}", use_container_width=True):
-                            slides_to_remove.append(slide_index)
-            
-            # Remove marked slides
-            if slides_to_remove:
+            # Define callback function to remove a slide
+            def remove_slide(slide_index):
+                """Remove a slide from slides_data and re-index remaining slides."""
                 st.session_state.slides_data = [
                     slide for slide in st.session_state.slides_data
-                    if slide["index"] not in slides_to_remove
+                    if slide["index"] != slide_index
                 ]
                 # Re-index remaining slides
                 for i, slide in enumerate(st.session_state.slides_data):
                     slide["index"] = i
-                st.success(f"Removed {len(slides_to_remove)} slide(s)")
-                st.rerun()
+            
+            # Create expanders for each slide
+            for slide in st.session_state.slides_data:
+                slide_index = slide["index"]
+                
+                with st.expander(f"Slide {slide_index + 1}", expanded=False):
+                    col1, col2, col3 = st.columns([2, 3, 1])
+                    with col1:
+                        # Display slide thumbnail
+                        if slide.get("png_base64"):
+                            try:
+                                # Decode base64 image and display
+                                # image_data = base64.b64decode(slide["png_base64"])
+                                image_html = f"<img src='{slide['png_base64']}' style='width:100%; height:auto;' />"
+                                st.markdown(image_html, unsafe_allow_html=True)
+                            except Exception as e:
+                                st.warning(f"Could not display thumbnail: {e}")
+                    with col2:
+                        # Edit speaker notes
+                        st.markdown("**Speaker Notes:**")
+                        new_notes = st.text_area(
+                            "Edit notes:",
+                            value=slide.get("notes", ""),
+                            height=150,
+                            key=f"notes_{slide_index}",
+                            label_visibility="collapsed"
+                        )
+                        # Update notes in session state if changed
+                        if new_notes != slide.get("notes", ""):
+                            st.session_state.slides_data[slide_index]["notes"] = new_notes
+                    with col3:
+                        st.button(
+                            "🗑️ Remove",
+                            key=f"remove_{slide_index}",
+                            on_click=remove_slide,
+                            args=(slide_index,),
+                            use_container_width=True
+                        )
             
             # Export option
             st.divider()
@@ -301,3 +301,35 @@ else:
                 )
         else:
             st.info("Load a Google Slides presentation to manage slides and speaker notes.")
+    
+    # --- TAB 3: DEBUG SESSION STATE ---
+    with tab3:
+        st.subheader("Session State Debug")
+        st.caption("Current session state for debugging purposes")
+        
+        # Display session state as JSON
+        st.json(dict(st.session_state))
+        
+        st.divider()
+        
+        # Display individual session state items
+        st.subheader("Session State Items")
+        for key, value in st.session_state.items():
+            with st.expander(f"📋 {key}"):
+                st.write(f"**Type:** `{type(value).__name__}`")
+                
+                # Display differently based on type
+                if key == "creds":
+                    st.info("Google credentials object (not displayed for security)")
+                elif isinstance(value, (str, int, float, bool)):
+                    st.code(repr(value))
+                elif isinstance(value, list):
+                    st.write(f"**Length:** {len(value)}")
+                    if len(value) > 0:
+                        st.json(value[:5] if len(value) > 5 else value)
+                        if len(value) > 5:
+                            st.caption(f"Showing first 5 of {len(value)} items")
+                elif isinstance(value, dict):
+                    st.json(value)
+                else:
+                    st.write(value)
