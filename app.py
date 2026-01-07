@@ -4,6 +4,8 @@ from google.genai import types
 import json
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+import base64
+from slides import get_slides_data
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -40,6 +42,10 @@ if "elevenlabs_api_key" not in st.session_state:
     st.session_state.elevenlabs_api_key = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "slides_data" not in st.session_state:
+    st.session_state.slides_data = None
+if "html_content" not in st.session_state:
+    st.session_state.html_content = ""
 
 # --- HANDLE GOOGLE OAUTH CALLBACK ---
 # Check if we are returning from Google Auth
@@ -188,16 +194,110 @@ else:
                 except Exception as e:
                     st.error(f"API Error: {e}")
     
-    # --- RIGHT COLUMN: HTML DISPLAY AREA ---
+    # --- RIGHT COLUMN: SLIDES MANAGEMENT ---
     with html_col:
-        st.subheader("Content Display")
+        st.subheader("Google Slides Manager")
         
-        # Initialize HTML content in session state if not present
-        if "html_content" not in st.session_state:
-            st.session_state.html_content = ""
+        # Slide Presentation ID Input
+        presentation_id = st.text_input(
+            "Slide Presentation ID:",
+            placeholder="Enter the Google Slides ID",
+            help="The ID from the Google Slides URL"
+        )
         
-        # Display HTML content if available
-        if st.session_state.html_content:
-            st.markdown(st.session_state.html_content, unsafe_allow_html=True)
+        if st.button("Load Slides", type="primary"):
+            # Check if user is authenticated with Google
+            if "creds" not in st.session_state:
+                st.error("❌ Please authenticate with Google in the sidebar first.")
+            elif not presentation_id:
+                st.warning("⚠️ Please enter a valid Presentation ID.")
+            else:
+                with st.spinner("Loading slides data..."):
+                    try:
+                        # Call get_slides_data from slides.py
+                        slides_data = get_slides_data(presentation_id, st.session_state.creds)
+                        
+                        if slides_data is None:
+                            st.error("Failed to load slides data. Please check the Presentation ID and permissions.")
+                        else:
+                            st.session_state.slides_data = slides_data
+                            st.success(f"✅ Successfully loaded {len(slides_data)} slides!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error loading slides: {e}")
+        
+        st.divider()
+        
+        # Display and edit slides if data is available
+        if st.session_state.slides_data:
+            st.subheader(f"Manage Slides ({len(st.session_state.slides_data)} slides)")
+            
+            # Option to clear slides data
+            if st.button("Clear Slides Data"):
+                st.session_state.slides_data = None
+                st.rerun()
+            
+            st.divider()
+            
+            # Create tabs for each slide
+            slides_to_remove = []
+            
+            for slide in st.session_state.slides_data:
+                slide_index = slide["index"]
+                
+                with st.expander(f"Slide {slide_index + 1}", expanded=False):
+                    # Display slide thumbnail
+                    if slide.get("png_base64"):
+                        try:
+                            # Decode base64 image and display
+                            # image_data = base64.b64decode(slide["png_base64"])
+                            image_html = f"<img src='{slide['png_base64']}' style='width:100%; height:auto;' />"
+                            st.markdown(image_html, unsafe_allow_html=True)
+                        except Exception as e:
+                            st.warning(f"Could not display thumbnail: {e}")
+                    
+                    # Edit speaker notes
+                    st.markdown("**Speaker Notes:**")
+                    new_notes = st.text_area(
+                        "Edit notes:",
+                        value=slide.get("notes", ""),
+                        height=150,
+                        key=f"notes_{slide_index}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Update notes in session state if changed
+                    if new_notes != slide.get("notes", ""):
+                        st.session_state.slides_data[slide_index]["notes"] = new_notes
+                    
+                    # Button to mark slide for removal
+                    col1, col2 = st.columns([3, 1])
+                    with col2:
+                        if st.button("🗑️ Remove", key=f"remove_{slide_index}", use_container_width=True):
+                            slides_to_remove.append(slide_index)
+            
+            # Remove marked slides
+            if slides_to_remove:
+                st.session_state.slides_data = [
+                    slide for slide in st.session_state.slides_data
+                    if slide["index"] not in slides_to_remove
+                ]
+                # Re-index remaining slides
+                for i, slide in enumerate(st.session_state.slides_data):
+                    slide["index"] = i
+                st.success(f"Removed {len(slides_to_remove)} slide(s)")
+                st.rerun()
+            
+            # Export option
+            st.divider()
+            st.subheader("Export Data")
+            if st.button("Download Slides Data as JSON"):
+                json_data = json.dumps(st.session_state.slides_data, indent=2)
+                st.download_button(
+                    label="📥 Download JSON",
+                    data=json_data,
+                    file_name="slides_data.json",
+                    mime="application/json"
+                )
         else:
-            st.info("Interactive content will appear here based on chat interactions.")
+            st.info("Load a Google Slides presentation to manage slides and speaker notes.")

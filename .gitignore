@@ -1,3 +1,4 @@
 .roo
 .cache
 .streamlit
+__pycache__
