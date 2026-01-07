@@ -5,6 +5,13 @@ import json
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="Math Assistant",
+    page_icon="🧮",
+    layout="wide"  # Makes content fill the screen width
+)
+
 # --- GOOGLE OAUTH CONFIGURATION ---
 SCOPES = [
     'https://www.googleapis.com/auth/presentations.readonly',
@@ -119,59 +126,78 @@ else:
     # Initialize Gemini client
     client = genai.Client(api_key=st.session_state.api_key)
 
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Create two-column layout
+    chat_col, html_col = st.columns([3, 2], gap="small")
+    
+    # --- LEFT COLUMN: CHAT INTERFACE ---
+    with chat_col:
+        # Display chat history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-    # File Uploader Container
-    with st.container():
-        uploaded_files = st.file_uploader(
-            "Attach materials",
-            type=["png", "jpg", "jpeg", "pdf", "mp4", "wav", "mp3"],
-            accept_multiple_files=True,
-            label_visibility="collapsed",
-            key="file_uploader"
-        )
+        # File Uploader Container
+        with st.container():
+            uploaded_files = st.file_uploader(
+                "Attach materials",
+                type=["png", "jpg", "jpeg", "pdf", "mp4", "wav", "mp3"],
+                accept_multiple_files=True,
+                label_visibility="collapsed",
+                key="file_uploader"
+            )
 
-    # Chat Input
-    if prompt := st.chat_input("Ask a math question..."):
-        # 1. Store and display user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        # Chat Input
+        if prompt := st.chat_input("Ask a math question..."):
+            # 1. Store and display user message
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        # 2. Prepare multimodal content
-        content_to_send = [prompt]
-        if uploaded_files:
-            for uploaded_file in uploaded_files:
-                file_bytes = uploaded_file.read()
-                content_to_send.append(
-                    types.Part.from_bytes(
-                        data=file_bytes,
-                        mime_type=uploaded_file.type,
+            # 2. Prepare multimodal content
+            content_to_send = [prompt]
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    file_bytes = uploaded_file.read()
+                    content_to_send.append(
+                        types.Part.from_bytes(
+                            data=file_bytes,
+                            mime_type=uploaded_file.type,
+                        )
                     )
-                )
 
-        # 3. Stream the Assistant response
-        with st.chat_message("assistant"):
-            try:
-                # Define a generator for Streamlit to consume
-                def stream_generator():
-                    for chunk in client.models.generate_content_stream(
-                            model="gemini-2.5-flash",
-                            config=types.GenerateContentConfig(
-                                system_instruction="Help with math homework."
-                            ),
-                            contents=content_to_send,
-                        ):
-                        yield chunk.text
+            # 3. Stream the Assistant response
+            with st.chat_message("assistant"):
+                try:
+                    # Define a generator for Streamlit to consume
+                    def stream_generator():
+                        for chunk in client.models.generate_content_stream(
+                                model="gemini-2.5-flash",
+                                config=types.GenerateContentConfig(
+                                    system_instruction="Help with math homework."
+                                ),
+                                contents=content_to_send,
+                            ):
+                            yield chunk.text
 
-                # Use st.write_stream to handle the chunks and cursor
-                full_response = st.write_stream(stream_generator())
-                
-                # Save full response to history
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
-                
-            except Exception as e:
-                st.error(f"API Error: {e}")
+                    # Use st.write_stream to handle the chunks and cursor
+                    full_response = st.write_stream(stream_generator())
+                    
+                    # Save full response to history
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    
+                except Exception as e:
+                    st.error(f"API Error: {e}")
+    
+    # --- RIGHT COLUMN: HTML DISPLAY AREA ---
+    with html_col:
+        st.subheader("Content Display")
+        
+        # Initialize HTML content in session state if not present
+        if "html_content" not in st.session_state:
+            st.session_state.html_content = ""
+        
+        # Display HTML content if available
+        if st.session_state.html_content:
+            st.markdown(st.session_state.html_content, unsafe_allow_html=True)
+        else:
+            st.info("Interactive content will appear here based on chat interactions.")
