@@ -16,8 +16,10 @@ from google import genai
 from google.genai.types import Content, Part
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
+from google_auth_oauthlib.flow import Flow
 from agents.voiceover_agent import create_voiceover_agent
 from agents.elevenlabs_agent import create_elevenlabs_agent
+from slides import get_slides_data_cached, slides_to_pdf
 
 
 # ============================================
@@ -32,6 +34,29 @@ st.set_page_config(
 
 st.title("🎙️ Voiceover Pipeline with Human-in-the-Loop")
 st.caption("Generate and refine educational voiceover scripts from PDF slides")
+
+
+# ============================================
+# Google OAuth Configuration
+# ============================================
+
+SCOPES = [
+    'https://www.googleapis.com/auth/presentations.readonly',
+    'https://www.googleapis.com/auth/drive.readonly'
+]
+
+
+@st.cache_resource
+def get_google_oauth_flow():
+    """Create and return OAuth flow for Google authentication."""
+    client_config = json.loads(st.secrets["CLIENT_CONFIG"])
+    redirect_uri = st.secrets.get("REDIRECT_URI", "http://localhost:8501")
+    
+    return Flow.from_client_config(
+        client_config,
+        scopes=SCOPES,
+        redirect_uri=redirect_uri
+    )
 
 
 # ============================================
@@ -100,14 +125,34 @@ def initialize_session_state():
         st.session_state.session_id = f"session_{uuid.uuid4().hex[:8]}"
     
     if 'workflow_state' not in st.session_state:
-        st.session_state.workflow_state = 'upload'
+        st.session_state.workflow_state = 'slides_import'  # Start with slides import
     
     if 'is_processing' not in st.session_state:
         st.session_state.is_processing = False
     
     if 'adk_session' not in st.session_state:
         st.session_state.adk_session = None
+    
+    # Google Slides state
+    if 'slides_data' not in st.session_state:
+        st.session_state.slides_data = None
 
+
+# ==============================
+# Handle Google OAuth Callback
+# ==============================
+# Check if we are returning from Google Auth
+if "code" in st.query_params and "creds" not in st.session_state:
+    try:
+        flow = get_google_oauth_flow()
+        flow.fetch_token(code=st.query_params["code"])
+        st.session_state.creds = flow.credentials
+        # Clean the URL by removing the code
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Authentication error: {e}")
+        st.query_params.clear()
 
 initialize_session_state()
 
@@ -117,7 +162,8 @@ initialize_session_state()
 # ============================================
 
 WORKFLOW_STATES = {
-    'upload': {'next': 'generate_voiceover', 'display': '📤 Upload PDF', 'step': 1},
+    'slides_import': {'next': 'upload', 'display': '📊 Import Slides', 'step': 0},
+    'upload': {'next': 'generate_voiceover', 'display': '📤 Upload /PDF', 'step': 1},
     'generate_voiceover': {'next': 'review_voiceover', 'display': '🎬 Generate Script', 'step': 2},
     'review_voiceover': {'next': 'add_audio_tags', 'display': '✏️ Review Script', 'step': 3},
     'add_audio_tags': {'next': 'review_final', 'display': '🎨 Add Audio Tags', 'step': 4},
@@ -136,9 +182,9 @@ def advance_workflow():
 
 def reset_workflow():
     """Reset to beginning."""
-    st.session_state.workflow_state = 'upload'
+    st.session_state.workflow_state = 'slides_import'  # Start from slides import
     # Clear relevant session state
-    for key in ['pdf_base64', 'scenes', 'refined_scenes', 'voiceover_approved', 'final_approved']:
+    for key in ['slides_data', 'pdf_base64', 'scenes', 'refined_scenes', 'voiceover_approved', 'final_approved']:
         if key in st.session_state:
             del st.session_state[key]
 
@@ -158,10 +204,34 @@ def set_session_state_value(key, value):
 
 
 # ============================================
-# Sidebar - Progress & Developer Options
+# Sidebar - Google Auth, Progress & Options
 # ============================================
 
 with st.sidebar:
+    # Google Authentication
+    st.header("🔐 Google Authentication")
+    
+    if "creds" not in st.session_state:
+        st.info("Not authenticated with Google")
+        try:
+            flow = get_google_oauth_flow()
+            auth_url, _ = flow.authorization_url(prompt='consent')
+            
+            # Custom HTML button to open in the same tab
+            auth_link = f'<a href="{auth_url}" target="_self"><button style="background-color: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%;">Log in with Google</button></a>'
+            st.markdown(auth_link, unsafe_allow_html=True)
+            st.caption("Required for Google Slides import")
+        except Exception as e:
+            st.error(f"Error setting up Google authentication: {e}")
+    else:
+        st.success("✅ Authenticated with Google")
+        if st.button("Sign out of Google", use_container_width=True):
+            del st.session_state.creds
+            st.rerun()
+    
+    st.divider()
+    
+    # Progress
     st.header("📊 Progress")
     
     # Show current step
@@ -169,9 +239,14 @@ with st.sidebar:
     current_info = WORKFLOW_STATES[current_step]
     total_steps = len(WORKFLOW_STATES)
     
-    progress_value = (current_info['step'] - 1) / (total_steps - 1)
+    # Adjust progress for step 0
+    if current_info['step'] == 0:
+        progress_value = 0.0
+    else:
+        progress_value = current_info['step'] / (total_steps - 1)
+    
     st.progress(progress_value)
-    st.caption(f"**Step {current_info['step']}/{total_steps}:** {current_info['display']}")
+    st.caption(f"**Step {current_info['step']}/{total_steps - 1}:** {current_info['display']}")
     
     st.divider()
     
@@ -207,34 +282,201 @@ with st.sidebar:
 
 
 # ============================================
-# STEP 1: Upload PDF
+# STEP 0: Import Google Slides
 # ============================================
 
-if st.session_state.workflow_state == 'upload':
-    st.header("Step 1: Upload PDF Slide Deck")
-    st.info("💡 Upload a PDF containing your educational slides. The AI will analyze each slide and generate voiceover scripts.")
+if st.session_state.workflow_state == 'slides_import':
+    st.header("Step 0: Import from Google Slides (Optional)")
+    st.info("💡 Load slides from Google Slides, edit speaker notes, and generate a PDF. Or skip to upload your own PDF.")
     
-    uploaded_file = st.file_uploader(
-        "Choose a PDF file",
-        type=['pdf'],
-        help="Upload a PDF file containing slides for voiceover generation"
-    )
-    
-    if uploaded_file:
-        pdf_data = process_pdf(uploaded_file.read())
-        st.session_state.pdf_base64 = pdf_data['base64']
-        
-        col1, col2, col3 = st.columns([2, 2, 1])
-        with col1:
-            st.success(f"✅ **Uploaded:** {uploaded_file.name}")
+    # Check Google authentication
+    if "creds" not in st.session_state:
+        st.warning("⚠️ Please authenticate with Google in the sidebar to import slides.")
+        col1, col2 = st.columns(2)
         with col2:
-            st.caption(f"📦 **Size:** {pdf_data['size']:,} bytes")
-        with col3:
-            if st.button("▶️ Next", type="primary", use_container_width=True):
+            if st.button("⏭️ Skip to Upload PDF", type="secondary", use_container_width=True):
                 advance_workflow()
                 st.rerun()
     else:
-        st.warning("📤 Please upload a PDF file to continue")
+        # Slide Presentation ID Input
+        presentation_id = st.text_input(
+            "Google Slides Presentation ID:",
+            placeholder="Enter the ID from the Google Slides URL",
+            help="Find the ID in the URL: https://docs.google.com/presentation/d/[ID]/edit"
+        )
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            load_slides_btn = st.button("📥 Load Slides", type="primary", use_container_width=True)
+        with col2:
+            if st.button("⏭️ Skip", use_container_width=True):
+                advance_workflow()
+                st.rerun()
+        
+        if load_slides_btn:
+            if not presentation_id:
+                st.warning("⚠️ Please enter a valid Presentation ID.")
+            else:
+                with st.spinner("Loading slides data..."):
+                    try:
+                        # Load slides using cached function
+                        slides_data = get_slides_data_cached(presentation_id, st.session_state.creds)
+                        
+                        if slides_data is None:
+                            st.error("Failed to load slides data. Please check the Presentation ID and permissions.")
+                        else:
+                            st.session_state.slides_data = slides_data
+                            st.success(f"✅ Successfully loaded {len(slides_data)} slides!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error loading slides: {e}")
+        
+        # Display and edit slides if data is available
+        if st.session_state.slides_data:
+            st.divider()
+            st.subheader(f"📝 Edit Slides ({len(st.session_state.slides_data)} slides)")
+            
+            # Define callback to remove a slide
+            def remove_slide(slide_index):
+                """Remove a slide from slides_data and re-index."""
+                st.session_state.slides_data = [
+                    slide for slide in st.session_state.slides_data
+                    if slide["index"] != slide_index
+                ]
+                # Re-index remaining slides
+                for i, slide in enumerate(st.session_state.slides_data):
+                    slide["index"] = i
+            
+            # Display each slide in an expander
+            for slide in st.session_state.slides_data:
+                slide_index = slide["index"]
+                
+                with st.expander(f"Slide {slide_index + 1}", expanded=False):
+                    col1, col2, col3 = st.columns([2, 3, 1])
+                    
+                    with col1:
+                        # Display slide thumbnail
+                        if slide.get("png_base64"):
+                            try:
+                                image_html = f"<img src='{slide['png_base64']}' style='width:100%; height:auto;' />"
+                                st.markdown(image_html, unsafe_allow_html=True)
+                            except Exception as e:
+                                st.warning(f"Could not display thumbnail: {e}")
+                    
+                    with col2:
+                        # Edit speaker notes
+                        st.markdown("**Speaker Notes:**")
+                        new_notes = st.text_area(
+                            "Edit notes:",
+                            value=slide.get("notes", ""),
+                            height=150,
+                            key=f"notes_{slide_index}",
+                            label_visibility="collapsed"
+                        )
+                        # Update notes in session state if changed
+                        if new_notes != slide.get("notes", ""):
+                            st.session_state.slides_data[slide_index]["notes"] = new_notes
+                    
+                    with col3:
+                        st.button(
+                            "🗑️ Remove",
+                            key=f"remove_{slide_index}",
+                            on_click=remove_slide,
+                            args=(slide_index,),
+                            use_container_width=True
+                        )
+            
+            # Generate PDF from slides
+            st.divider()
+            st.subheader("📄 Generate PDF")
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                if st.button("🎨 Create PDF from Slides", type="primary", use_container_width=True):
+                    with st.spinner("Generating PDF..."):
+                        try:
+                            # Generate PDF from slides
+                            pdf_base64 = slides_to_pdf(st.session_state.slides_data)
+                            st.session_state.pdf_base64 = pdf_base64
+                            st.success("✅ PDF generated successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error generating PDF: {e}")
+                            with st.expander("🔍 Error Details"):
+                                st.code(traceback.format_exc())
+            
+            with col2:
+                if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
+                    if st.button("▶️ Continue", type="primary", use_container_width=True):
+                        advance_workflow()
+                        st.rerun()
+            
+            # Display PDF preview if available
+            if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
+                st.divider()
+                st.subheader("📄 PDF Preview")
+                
+                # Decode base64 to bytes for display
+                pdf_bytes = base64.b64decode(st.session_state.pdf_base64)
+                
+                # Display PDF using iframe
+                pdf_display = f'<iframe src="data:application/pdf;base64,{st.session_state.pdf_base64}" width="100%" height="600px" type="application/pdf"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+                
+                # Download button
+                st.download_button(
+                    label="📥 Download PDF",
+                    data=pdf_bytes,
+                    file_name="slides_presentation.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+
+
+# ============================================
+# STEP 1: Upload PDF
+# ============================================
+
+elif st.session_state.workflow_state == 'upload':
+    st.header("Step 1: Upload PDF Slide Deck")
+    st.info("💡 Upload a PDF containing your educational slides. The AI will analyze each slide and generate voiceover scripts.")
+    
+    if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
+        st.success("✅ PDF already uploaded.")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.caption("📄 Uploaded PDF Preview:")
+            # Display PDF using iframe
+            pdf_display = f'<iframe src="data:application/pdf;base64,{st.session_state.pdf_base64}" width="100%" height="600px" type="application/pdf"></iframe>'
+            st.markdown(pdf_display, unsafe_allow_html=True)
+        
+        with col2:
+            if st.button("▶️ Continue", type="primary", use_container_width=True):
+                advance_workflow()
+                st.rerun()
+    else:
+        uploaded_file = st.file_uploader(
+            "Choose a PDF file",
+            type=['pdf'],
+            help="Upload a PDF file containing slides for voiceover generation"
+        )
+        
+        if uploaded_file:
+            pdf_data = process_pdf(uploaded_file.read())
+            st.session_state.pdf_base64 = pdf_data['base64']
+            
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                st.success(f"✅ **Uploaded:** {uploaded_file.name}")
+            with col2:
+                st.caption(f"📦 **Size:** {pdf_data['size']:,} bytes")
+            with col3:
+                if st.button("▶️ Next", type="primary", use_container_width=True):
+                    advance_workflow()
+                    st.rerun()
+        else:
+            st.warning("📤 Please upload a PDF file to continue")
 
 
 # ============================================
@@ -366,7 +608,7 @@ elif st.session_state.workflow_state == 'review_voiceover':
         for i, scene in enumerate(st.session_state.scenes):
             with st.expander(
                 f"🎬 Scene {i+1}: {scene.get('comment', '')[:60]}...",
-                expanded=(i == 0)
+                expanded=True
             ):
                 col1, col2 = st.columns([1, 3])
                 
@@ -555,7 +797,7 @@ elif st.session_state.workflow_state == 'review_final':
         for i, scene in enumerate(st.session_state.refined_scenes):
             with st.expander(
                 f"🎬 Scene {i+1}: {scene.get('comment', '')[:60]}...",
-                expanded=(i == 0)
+                expanded=True
             ):
                 col1, col2 = st.columns(2)
                 
