@@ -2,11 +2,13 @@
 
 A Streamlit application that uses Google Gemini ADK agents to generate and refine educational voiceover scripts from PDF slides, with human review and editing at each step.
 
+> **Note:** This application uses ADK-compliant agents that also work with `adk web`. See [README_ADK_COMPATIBILITY.md](README_ADK_COMPATIBILITY.md) for details on the dual-mode architecture.
+
 ## 📋 Overview
 
 This application demonstrates a human-in-the-loop workflow using ADK agents:
 
-1. **Upload PDF** - Upload educational slides
+1. **Import Slides** - Import from Google Slides or upload PDF
 2. **Generate Voiceover** - AI generates voiceover scripts for each slide
 3. **Review & Edit** - Review and manually edit the generated scripts
 4. **Add Audio Tags** - AI adds ElevenLabs audio tags for expressive speech
@@ -17,33 +19,34 @@ This application demonstrates a human-in-the-loop workflow using ADK agents:
 
 ```
 Streamlit App (UI Orchestrator)
-  ├─ PDFVoiceoverAgent (Custom ADK Agent)
+  ├─ PDFVoiceoverAgent (ADK-compliant Custom Agent)
   │   └─ Analyzes PDF slides → generates voiceover scripts
-  └─ ElevenLabsAgent (Custom ADK Agent)
+  └─ ElevenLabsAgent (ADK-compliant Custom Agent)
       └─ Enhances scripts → adds audio tags
 ```
 
-**Key Design Decision:** The Streamlit UI orchestrates independent agents with human review between each step, rather than using a SequentialAgent. This provides:
-- Natural workflow with button clicks
-- Full editing control at each stage
-- Visual progress indicators
-- Flexible workflow (can regenerate, go back, etc.)
+**Key Design Decision:** The Streamlit UI orchestrates independent ADK agents with human review between each step. The agents follow Google ADK best practices and are also compatible with `adk web` for debugging.
 
 ## 🏗️ Project Structure
 
 ```
-voiceover-pipeline/
-├── agents/
+streamlit-experiments/
+├── voiceover_agent/             # Voiceover agent (ADK-compliant)
 │   ├── __init__.py              # Package initialization
-│   ├── config.py                # System prompts and configuration
-│   ├── models.py                # Pydantic models for structured output
-│   ├── voiceover_agent.py       # PDF → Voiceover agent
-│   └── elevenlabs_agent.py      # Voiceover → Audio tags agent
+│   ├── agent.py                 # Agent class + factory function
+│   └── .env                     # API key for adk web
+├── elevenlabs_agent/            # ElevenLabs agent (ADK-compliant)
+│   ├── __init__.py              # Package initialization
+│   ├── agent.py                 # Agent class + factory function
+│   └── .env                     # API key for adk web
 ├── .streamlit/
 │   └── secrets.toml.template    # API key configuration template
 ├── voiceover_app.py             # Main Streamlit application
+├── slides.py                    # Google Slides integration
 ├── requirements.txt             # Python dependencies
-└── README_VOICEOVER_APP.md      # This file
+├── README_VOICEOVER_APP.md      # This file (Streamlit guide)
+├── README_ADK_COMPATIBILITY.md  # ADK compatibility details
+└── ADK_QUICKSTART.md            # Quick start for adk web
 ```
 
 ## 🚀 Setup Instructions
@@ -54,7 +57,9 @@ voiceover-pipeline/
 pip install -r requirements.txt
 ```
 
-### 2. Configure API Key
+### 2. Configure API Keys
+
+#### For Streamlit
 
 Create `.streamlit/secrets.toml` from the template:
 
@@ -70,6 +75,18 @@ GEMINI_API_KEY = "your-actual-api-key-here"
 
 Get your API key from: https://aistudio.google.com/app/apikey
 
+#### For ADK Web (Optional)
+
+If you also want to test agents with `adk web`, edit the `.env` files:
+
+```bash
+# voiceover_agent/.env
+GOOGLE_API_KEY=your_actual_api_key_here
+
+# elevenlabs_agent/.env
+GOOGLE_API_KEY=your_actual_api_key_here
+```
+
 ### 3. Run the Application
 
 ```bash
@@ -82,35 +99,42 @@ The app will open in your browser at `http://localhost:8501`
 
 ### Step-by-Step Workflow
 
-1. **Upload PDF**
-   - Click "Choose a PDF file"
-   - Select a PDF containing educational slides
+1. **Import Slides (Optional)**
+   - Authenticate with Google
+   - Enter Google Slides Presentation ID
+   - Load and edit speaker notes
+   - Generate PDF from slides
+   - Or skip to upload your own PDF
+
+2. **Upload PDF**
+   - Upload a PDF containing educational slides
+   - Preview the uploaded PDF
    - Click "Next" to continue
 
-2. **Generate Voiceover Script**
+3. **Generate Voiceover Script**
    - Click "Generate Voiceover Script"
    - Wait for AI to analyze slides and generate scripts
    - Review the generated scenes
 
-3. **Review & Edit Scripts**
+4. **Review & Edit Scripts**
    - Each scene is displayed in an expandable section
    - Edit the comment (scene description)
    - Edit the speech (voiceover text)
    - Click "Save Edits" to save changes
    - Check "Approve & Continue" when ready
 
-4. **Add Audio Tags**
+5. **Add Audio Tags**
    - Click "Add ElevenLabs Audio Tags"
    - AI enhances scripts with expressive audio tags
    - Review the enhanced versions
 
-5. **Final Review**
+6. **Final Review**
    - Compare original vs. tagged versions
    - Edit audio tags if needed
    - Click "Save Final Edits"
    - Check "Final Approval" when ready
 
-6. **Export**
+7. **Export**
    - Download JSON (full data with metadata)
    - Download TXT (script text only)
    - Preview all scenes
@@ -142,54 +166,70 @@ The app will open in your browser at `http://localhost:8501`
 
 ## 🔧 Code Highlights
 
-### Agent Implementation
+### ADK-Compliant Agent Structure
 
-Both agents are **custom ADK agents** (inherit from `BaseAgent`):
+Each agent follows ADK best practices with both a class definition and factory function:
 
 ```python
+# voiceover_agent/agent.py
+
 class PDFVoiceoverAgent(BaseAgent):
+    def __init__(self, gemini_client, name="PDFVoiceoverAgent"):
+        super().__init__(name=name, description="...")
+        self._gemini_client = gemini_client
+    
     async def _run_async_impl(self, ctx: InvocationContext):
         # Get PDF from session state
         pdf_base64 = ctx.session.state.get('pdf_base64')
         
         # Process with Gemini
-        response = self.gemini_client.models.generate_content(...)
+        response = self._gemini_client.models.generate_content(...)
         
         # Save to session state
         ctx.session.state['scenes'] = scenes
         
         # Yield event
         yield Event(...)
+
+# Factory function for Streamlit
+def create_voiceover_agent(gemini_client):
+    return PDFVoiceoverAgent(gemini_client=gemini_client)
+
+# Root agent for adk web
+root_agent = PDFVoiceoverAgent(gemini_client=client, name="voiceover_agent")
 ```
 
-### Streamlit Orchestration
+### Streamlit Integration
 
 ```python
-# Step 1: User uploads PDF
-uploaded_file = st.file_uploader(...)
+# voiceover_app.py
+from voiceover_agent.agent import create_voiceover_agent
+from elevenlabs_agent.agent import create_elevenlabs_agent
 
-# Step 2: Run first agent
-runner = InMemoryRunner(agent=voiceover_agent, ...)
+# Initialize client with Streamlit secrets
+gemini_client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+# Create agents using factory functions
+voiceover_agent = create_voiceover_agent(gemini_client)
+elevenlabs_agent = create_elevenlabs_agent(gemini_client)
+
+# Use agents in workflow
+runner = Runner(agent=voiceover_agent, ...)
 events = list(runner.run(...))
-
-# Step 3: Human reviews and edits
-for scene in scenes:
-    edited_speech = st.text_area(...)
-
-# Step 4: Run second agent with edited data
-session.state['scenes'] = edited_scenes
-runner = InMemoryRunner(agent=elevenlabs_agent, ...)
 ```
 
 ## 📊 Features
 
 ### Agent Features
+- ✅ ADK-compliant structure (works with `adk web`)
 - ✅ Structured output with Pydantic models
 - ✅ Session state management
 - ✅ Error handling
 - ✅ Event streaming
+- ✅ Factory functions for programmatic use
 
 ### UI Features
+- ✅ Google Slides import and editing
 - ✅ Multi-step workflow with progress tracking
 - ✅ Human review and editing at each stage
 - ✅ Visual feedback during processing
@@ -206,10 +246,12 @@ runner = InMemoryRunner(agent=elevenlabs_agent, ...)
 **Solution:** Create `.streamlit/secrets.toml` with your API key
 
 ### Import Errors
-**Error:** "No module named 'google.adk'"
+**Error:** "No module named 'voiceover_agent'"
 
-**Solution:** Install dependencies:
+**Solution:** Make sure you're in the project directory and virtual environment is activated:
 ```bash
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
@@ -221,38 +263,58 @@ pip install -r requirements.txt
 2. Check browser console for errors
 3. Use "Developer Options" → "Reset All Session State"
 
+## 🔬 Testing with ADK Web
+
+You can also test the agents independently using `adk web`:
+
+```bash
+# Configure .env files with API keys first
+adk web
+
+# Open http://localhost:8000
+# Select voiceover_agent or elevenlabs_agent
+```
+
+See [ADK_QUICKSTART.md](ADK_QUICKSTART.md) for details.
+
 ## 📚 Related Documentation
 
-- **ADK Documentation**: [google.github.io/adk-docs](https://google.github.io/adk-docs)
-- **Gemini API**: [ai.google.dev/gemini-api](https://ai.google.dev/gemini-api)
-- **Streamlit Docs**: [docs.streamlit.io](https://docs.streamlit.io)
-- **ElevenLabs Voice**: [elevenlabs.io/docs](https://elevenlabs.io/docs)
+- **[README_ADK_COMPATIBILITY.md](README_ADK_COMPATIBILITY.md)** - How agents work in both Streamlit and ADK Web
+- **[ADK_QUICKSTART.md](ADK_QUICKSTART.md)** - Using agents with `adk web`
+- **[Google ADK Docs](https://adk.google.dev/)** - Official ADK documentation
+- **[Gemini API](https://ai.google.dev/gemini-api)** - Gemini API reference
+- **[Streamlit Docs](https://docs.streamlit.io)** - Streamlit documentation
+- **[ElevenLabs Voice](https://elevenlabs.io/docs)** - ElevenLabs voice synthesis
 
 ## 🎓 Learning Points
 
 ### ADK Concepts Demonstrated
 1. **Custom Agents** - Inheriting from `BaseAgent`
-2. **Session State** - Passing data between agents
-3. **Event System** - Yielding events with state deltas
-4. **Structured Output** - Using Pydantic schemas
-5. **InMemoryRunner** - Running agents independently
+2. **ADK Compliance** - Following Google's recommended structure
+3. **Dual-Mode Design** - Same agents work in multiple environments
+4. **Session State** - Passing data between agents
+5. **Event System** - Yielding events with state deltas
+6. **Structured Output** - Using Pydantic schemas
+7. **Factory Pattern** - Providing flexible initialization
 
 ### Human-in-the-Loop Pattern
 - UI orchestrates agents (not SequentialAgent)
 - Each agent is independent and reusable
 - State management via ADK sessions + Streamlit session_state
 - Natural workflow with button clicks and editing
+- Single source of truth for agent logic
 
 ## 🔮 Future Enhancements
 
 Potential additions:
 - [ ] Audio preview with TTS
 - [ ] Batch PDF processing
-- [ ] Custom prompt editing
+- [ ] Custom prompt editing in UI
 - [ ] Export to video timeline formats
 - [ ] Translation agent for multiple languages
 - [ ] Quality scoring agent
 - [ ] Collaborative editing (multi-user)
+- [ ] Voice selection for ElevenLabs
 
 ## 📄 License
 
@@ -260,10 +322,11 @@ This is example code for educational purposes demonstrating ADK and Streamlit in
 
 ## 🤝 Contributing
 
-This application was created to demonstrate best practices for:
-- Building multi-agent systems with Google Gemini ADK
+This application demonstrates best practices for:
+- Building ADK-compliant agents that work in multiple environments
 - Creating human-in-the-loop workflows with Streamlit
 - Orchestrating agents through UI rather than agent systems
 - Managing state between agents and UI
+- Following Google ADK conventions
 
 Feel free to adapt this pattern for your own applications!

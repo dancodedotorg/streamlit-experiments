@@ -17,8 +17,8 @@ from google.genai.types import Content, Part
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google_auth_oauthlib.flow import Flow
-from agents.voiceover_agent import create_voiceover_agent
-from agents.elevenlabs_agent import create_elevenlabs_agent
+from voiceover_agent.agent import create_voiceover_agent
+from elevenlabs_agent.agent import create_elevenlabs_agent
 from slides import get_slides_data_cached, slides_to_pdf
 
 
