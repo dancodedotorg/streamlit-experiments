@@ -5,7 +5,7 @@ import json
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 import base64
-from slides import get_slides_data
+from slides import get_slides_data_cached
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -20,8 +20,13 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly'
 ]
 
+@st.cache_resource
 def get_flow():
-    """Create and return OAuth flow for Google authentication."""
+    """Create and return OAuth flow for Google authentication.
+    
+    Cached as a resource since Flow objects are expensive to create
+    and can be reused across sessions.
+    """
     # Load client config from Streamlit Secrets
     client_config = json.loads(st.secrets["CLIENT_CONFIG"])
     
@@ -34,6 +39,21 @@ def get_flow():
         scopes=SCOPES,
         redirect_uri=redirect_uri
     )
+
+@st.cache_resource
+def get_gemini_client(api_key: str):
+    """Create and return a Gemini client.
+    
+    Cached as a resource to avoid recreating the client on every rerun.
+    The cache key includes the API key so a new client is created if the key changes.
+    
+    Args:
+        api_key: The Gemini API key
+        
+    Returns:
+        genai.Client: A configured Gemini client
+    """
+    return genai.Client(api_key=api_key)
 
 # --- SESSION STATE INITIALIZATION ---
 if "api_key" not in st.session_state:
@@ -129,8 +149,8 @@ st.title("🧮 Math Assistant")
 if not st.session_state.api_key:
     st.warning("⚠️ Please enter a valid Gemini API Key in the sidebar to start chatting.")
 else:
-    # Initialize Gemini client
-    client = genai.Client(api_key=st.session_state.api_key)
+    # Initialize Gemini client (cached to avoid recreating on every rerun)
+    client = get_gemini_client(st.session_state.api_key)
 
     # Create tabs for different functionalities
     tab1, tab2, tab3 = st.tabs(["💬 Chat", "📊 Google Slides Manager", "🐛 Debug"])
@@ -142,25 +162,26 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # File Uploader Container
-        with st.container():
-            uploaded_files = st.file_uploader(
-                "Attach materials",
-                type=["png", "jpg", "jpeg", "pdf", "mp4", "wav", "mp3"],
-                accept_multiple_files=True,
-                label_visibility="collapsed",
-                key="file_uploader"
-            )
-
-        # Chat Input
-        if prompt := st.chat_input("Ask a math question..."):
-            # 1. Store and display user message
-            st.session_state.messages.append({"role": "user", "content": prompt})
+        # Chat Input with built-in file upload support
+        if submission := st.chat_input(
+            "Ask a math question...",
+            accept_file="multiple",
+            file_type=["png", "jpg", "jpeg", "pdf", "mp4", "wav", "mp3"]
+        ):
+            # 1. Extract message and files from submission
+            user_message = submission.text if hasattr(submission, 'text') else submission
+            uploaded_files = submission.files if hasattr(submission, 'files') else []
+            
+            # 2. Store and display user message
+            st.session_state.messages.append({"role": "user", "content": user_message})
             with st.chat_message("user"):
-                st.markdown(prompt)
+                st.markdown(user_message)
+                # Display attached files
+                if uploaded_files:
+                    st.caption(f"📎 {len(uploaded_files)} file(s) attached")
 
-            # 2. Prepare multimodal content
-            content_to_send = [prompt]
+            # 3. Prepare multimodal content
+            content_to_send = [user_message] if user_message else []
             if uploaded_files:
                 for uploaded_file in uploaded_files:
                     file_bytes = uploaded_file.read()
@@ -214,8 +235,9 @@ else:
             else:
                 with st.spinner("Loading slides data..."):
                     try:
-                        # Call get_slides_data from slides.py
-                        slides_data = get_slides_data(presentation_id, st.session_state.creds)
+                        # Call cached get_slides_data from slides.py
+                        # Cached with presentation_id as key to avoid re-fetching same presentation
+                        slides_data = get_slides_data_cached(presentation_id, st.session_state.creds)
                         
                         if slides_data is None:
                             st.error("Failed to load slides data. Please check the Presentation ID and permissions.")
