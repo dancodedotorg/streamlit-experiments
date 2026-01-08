@@ -168,7 +168,8 @@ WORKFLOW_STATES = {
     'review_voiceover': {'next': 'add_audio_tags', 'display': '✏️ Review Script', 'step': 3},
     'add_audio_tags': {'next': 'review_final', 'display': '🎨 Add Audio Tags', 'step': 4},
     'review_final': {'next': 'export', 'display': '👀 Final Review', 'step': 5},
-    'export': {'next': None, 'display': '📥 Export', 'step': 6}
+    'export': {'next': 'debug', 'display': '📥 Export', 'step': 6},
+    'debug': {'next': None, 'display': '🔧 Debug', 'step': 7}
 }
 
 
@@ -247,6 +248,33 @@ with st.sidebar:
     
     st.progress(progress_value)
     st.caption(f"**Step {current_info['step']}/{total_steps - 1}:** {current_info['display']}")
+    
+    # Quick navigation buttons
+    st.markdown("**Jump to Step:**")
+    
+    # Create a grid layout for navigation buttons
+    nav_cols = st.columns(1)
+    for i, (state_key, state_info) in enumerate(WORKFLOW_STATES.items()):
+        col_index = i % 1  # Single column
+        with nav_cols[col_index]:
+            # Highlight current step
+            button_type = "primary" if state_key == current_step else "secondary"
+            is_current = state_key == current_step
+            
+            # Create button label with emoji and step number
+            button_label = f"{state_info['display']}"
+            if is_current:
+                button_label = f"➤ {button_label}"
+            
+            if st.button(
+                button_label,
+                key=f"nav_{state_key}",
+                type=button_type,
+                use_container_width=True,
+                disabled=is_current
+            ):
+                st.session_state.workflow_state = state_key
+                st.rerun()
     
     st.divider()
     
@@ -952,5 +980,127 @@ elif st.session_state.workflow_state == 'export':
         # Start over
         if st.button("🔄 Create New Project", use_container_width=True, type="primary"):
             reset_workflow()
+            st.rerun()
+
+
+# ============================================
+# STEP 7: Debug - Session State Inspector
+# ============================================
+
+elif st.session_state.workflow_state == 'debug':
+    st.header("Step 7: Debug - Session State Inspector")
+    st.info("💡 View all session state variables and their values for debugging purposes.")
+    
+    # Overview metrics
+    st.subheader("📊 Session Overview")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Session State Keys", len(st.session_state.keys()))
+    
+    with col2:
+        workflow_step = WORKFLOW_STATES[st.session_state.workflow_state]['step']
+        st.metric("Current Workflow Step", f"{workflow_step}/{len(WORKFLOW_STATES) - 1}")
+    
+    with col3:
+        has_pdf = "✅" if "pdf_base64" in st.session_state and st.session_state.pdf_base64 else "❌"
+        st.metric("PDF Loaded", has_pdf)
+    
+    st.divider()
+    
+    # Display full session state
+    st.subheader("🔍 Full Session State")
+    
+    # Create a JSON-serializable version of session state
+    session_state_dict = {}
+    for key in st.session_state.keys():
+        value = st.session_state[key]
+        
+        # Handle non-serializable objects
+        if key in ['session_service', 'adk_session', 'creds']:
+            session_state_dict[key] = f"<{type(value).__name__} object>"
+        elif key == 'pdf_base64' and value:
+            # Truncate base64 data for display
+            session_state_dict[key] = f"<base64 data, {len(value)} chars>"
+        elif key == 'slides_data' and value:
+            # Show summary of slides data
+            session_state_dict[key] = {
+                "type": "list of slides",
+                "count": len(value),
+                "sample": value[0] if value else None
+            }
+        elif isinstance(value, (str, int, float, bool, type(None))):
+            session_state_dict[key] = value
+        elif isinstance(value, (list, dict)):
+            session_state_dict[key] = value
+        else:
+            session_state_dict[key] = f"<{type(value).__name__}>"
+    
+    # Use st.json for pretty display
+    st.json(session_state_dict)
+    
+    st.divider()
+    
+    # Individual key inspection
+    st.subheader("🔎 Inspect Individual Keys")
+    
+    # Filter options
+    show_all = st.checkbox("Show all keys (including internal)", value=False)
+    
+    # Get keys to display
+    all_keys = sorted(st.session_state.keys())
+    internal_keys = ['session_service', 'adk_session', 'creds', 'FormSubmitter']
+    
+    if show_all:
+        display_keys = all_keys
+    else:
+        display_keys = [k for k in all_keys if not any(internal in k for internal in internal_keys)]
+    
+    # Select a key to inspect
+    if display_keys:
+        selected_key = st.selectbox("Select a key to inspect:", display_keys)
+        
+        if selected_key:
+            st.markdown(f"**Key:** `{selected_key}`")
+            st.markdown(f"**Type:** `{type(st.session_state[selected_key]).__name__}`")
+            
+            value = st.session_state[selected_key]
+            
+            # Display value based on type
+            if isinstance(value, (str, int, float, bool, type(None))):
+                st.write("**Value:**")
+                st.code(str(value))
+            elif isinstance(value, dict):
+                st.write("**Value (JSON):**")
+                st.json(value)
+            elif isinstance(value, list):
+                st.write(f"**Value (List with {len(value)} items):**")
+                st.json(value)
+            else:
+                st.write("**Value:**")
+                st.write(value)
+    else:
+        st.info("No session state keys to display")
+    
+    st.divider()
+    
+    # Actions
+    st.subheader("⚙️ Actions")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🏠 Go to Start", use_container_width=True):
+            st.session_state.workflow_state = 'slides_import'
+            st.rerun()
+    
+    with col2:
+        if st.button("🔄 Reset Workflow", use_container_width=True):
+            reset_workflow()
+            st.rerun()
+    
+    with col3:
+        if st.button("📥 Go to Export", use_container_width=True):
+            st.session_state.workflow_state = 'export'
             st.rerun()
 
