@@ -5,7 +5,7 @@ import json
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 import base64
-from slides import get_slides_data_cached
+from slides import get_slides_data_cached, slides_to_pdf
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -320,6 +320,37 @@ else:
                     data=json_data,
                     file_name="slides_data.json",
                     mime="application/json"
+                )
+            
+            # PDF Generation
+            st.divider()
+            if st.button("Create PDF", type="primary"):
+                with st.spinner("Generating PDF..."):
+                    try:
+                        # Call slides_to_pdf function
+                        pdf_base64 = slides_to_pdf(st.session_state.slides_data)
+                        st.session_state.pdf_base64 = pdf_base64
+                        st.success("✅ PDF generated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error generating PDF: {e}")
+            
+            # Display PDF if available
+            if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
+                st.subheader("Generated PDF")
+                # Decode base64 to bytes for display
+                pdf_bytes = base64.b64decode(st.session_state.pdf_base64)
+                
+                # Display PDF using iframe with data URI
+                pdf_display = f'<iframe src="data:application/pdf;base64,{st.session_state.pdf_base64}" width="100%" height="800px" type="application/pdf"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+                
+                # Also provide download button
+                st.download_button(
+                    label="📥 Download PDF",
+                    data=pdf_bytes,
+                    file_name="slides_presentation.pdf",
+                    mime="application/pdf"
                 )
         else:
             st.info("Load a Google Slides presentation to manage slides and speaker notes.")
