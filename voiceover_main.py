@@ -102,6 +102,7 @@ custom_pages = [
     st.Page("custom_pages/upload.py", title="Upload & Process", icon=":material/cloud_upload:"),
     st.Page("custom_pages/generate_voiceover.py", title="Generate Voiceover", icon=":material/mic:"),
     st.Page("custom_pages/add_audio_tags.py", title="Add Audio Tags", icon=":material/music_note:"),
+    st.Page("custom_pages/generate_elevenlabs_audio.py", title="Generate ElevenLabs Audio", icon=":material/headphones:"),
     st.Page("custom_pages/export.py", title="Export Voiceover", icon=":material/download:"),
     st.Page("custom_pages/debug.py", title="Debug & Session", icon=":material/bug_report:")
 ]

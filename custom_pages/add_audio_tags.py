@@ -32,6 +32,7 @@ def app_page():
                 )
                 
                 st.session_state.refined_scenes = refined_scenes
+                st.session_state.scenes = refined_scenes
                 
                 st.write(f"✅ Enhanced {len(refined_scenes)} scenes!")
                 status.update(label="✅ Audio tags complete!", state="complete")
@@ -120,6 +121,6 @@ def app_page():
                 disabled=not final_approved,
                 width="stretch"
             ):
-                st.switch_page("custom_pages/export.py")
+                st.switch_page("custom_pages/generate_elevenlabs_audio.py")
 
 app_page()
