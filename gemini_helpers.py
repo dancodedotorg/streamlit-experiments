@@ -180,7 +180,241 @@ You will receive an object (dictionary), with an array of objects, where each ob
 * Return an identical array with a new "elevenlabs" property containing the results of your work.
 * Present ONLY the enhanced dialogue text in a conversational format.
 * **Audio tags** **MUST** be enclosed in square brackets (e.g., `[laughing]`).
-* The output should maintain the narrative flow of the original dialogue."""
+* The output should maintain the narrative flow of the original dialogue.
+
+
+
+# 4 Few-Shot Examples
+
+**Example 1:**
+*Input:*
+
+```
+{
+  "scenes": [
+    {
+      "comment": "Scene 1: Introduction to Variables",
+      "speech": "Hi, this is a quick byte about Variables."
+    },
+    {
+      "comment": "Scene 2: What is a Variable?",
+      "speech": "So what is a variable? A variable is a container that stores a value in memory. Think of it like a labeled box that holds information, like a score or username."
+    },
+    {
+      "comment": "Scene 3: What is a Data Type?",
+      "speech": "Variables have different data types. Three important ones are Ints, which are like numbers; Strings, which are like words and sentences; and Booleans, which can be either true or false. Let's see how variables work in code."
+    },
+    {
+      "comment": "Scene 4: Program Overview",
+      "speech": "This is a program that creates two variables, then prints them to the console. Let's go through step by step."
+    },
+    {
+      "comment": "Scene 5: Creating the username variable",
+      "speech": "First, we create our variable and give it a name. This one is called username."
+    },
+    {
+      "comment": "Scene 6: Assigning a value to username",
+      "speech": "Then we use the equal sign to assign it a value. In this case, we're assigning it the String value 'Kai'. You can tell it's a string because of the quotes."
+    },
+    {
+      "comment": "Scene 7: Creating and assigning the level variable",
+      "speech": "Next, we're making another variable called level and assigning the integer value four. If you were to read this line out loud, you could say 'level gets the value four'."
+    },
+    {
+      "comment": "Scene 8: Using the print function for the username",
+      "speech": "Now we're using the print function to make text appear in the console. First, it'll print the string 'User:'."
+    },
+    {
+      "comment": "Scene 9: Printing the value of the username variable",
+      "speech": "Then we use a comma to tell it to print the username variable. When the program runs, it'll take the value from our username variable and use that to print."
+    },
+    {
+      "comment": "Scene 10: Using the print function for the level",
+      "speech": "The same thing happens with the next print line. First it prints the string 'Level:' with a colon, and then it prints the value of our level variable, which is four."
+    },
+    {
+      "comment": "Scene 11: Important note about referencing variables",
+      "speech": "Notice that when you use variables, you don't put any quotes around them. That's what tells the computer to use the variable's value rather than the actual variable name."
+    }
+  ]
+}
+```
+
+*Output:*
+
+```
+{
+  "scenes": [
+    {
+      "comment": "Scene 1: Introduction to Variables",
+      "speech": "Hi, this is a quick byte about Variables.",
+      "elevenlabs": "[warmly welcoming] Hi there! This is a Quick Byte about variables."
+    },
+    {
+      "comment": "Scene 2: What is a Variable?",
+      "speech": "So what is a variable? A variable is a container that stores a value in memory. Think of it like a labeled box that holds information, like a score or username.",
+      "elevenlabs": "[thoughtful] So, what is a variable? [patiently] A variable is a container that stores a value in memory. [clarifying] Think of it like a labeled box that holds information, like a score or a username."
+    },
+    {
+      "comment": "Scene 3: What is a Data Type?",
+      "speech": "Variables have different data types. Three important ones are Ints, which are like numbers; Strings, which are like words and sentences; and Booleans, which can be either true or false. Let's see how variables work in code.",
+      "elevenlabs": "[deliberate] Variables have different data types. Three important ones are ints, which are like numbers; strings, which are like words and sentences; and booleans, which can be either true or false. [excited] Let's see how variables work in code!"
+    },
+    {
+      "comment": "Scene 4: Program Overview",
+      "speech": "This is a program that creates two variables, then prints them to the console. Let's go through step by step.",
+      "elevenlabs": "[explaining] This is a program that creates two variables, then prints them to the console. [patiently] Let's go through, step by step."
+    },
+    {
+      "comment": "Scene 5: Creating the username variable",
+      "speech": "First, we create our variable and give it a name. This one is called username.",
+      "elevenlabs": "[direct] First, we create our variable and give it a name. This one is called username."
+    },
+    {
+      "comment": "Scene 6: Assigning a value to username",
+      "speech": "Then we use the equal sign to assign it a value. In this case, we're assigning it the String value 'Kai'. You can tell it's a string because of the quotes.",
+      "elevenlabs": "[continuing] Then we use the equal sign to assign it a value. In this case, we're assigning it the string value 'Kai'. [clarifying] You can tell it's a string because of the quotes."
+    },
+    {
+      "comment": "Scene 7: Creating and assigning the level variable",
+      "speech": "Next, we're making another variable called level and assigning the integer value four. If you were to read this line out loud, you could say 'level gets the value four'.",
+      "elevenlabs": "[patiently] Next, we're making another variable called level and assigning the integer value four. [thoughtful] If you were to read this line out loud, you could say 'level gets the value four'."
+    },
+    {
+      "comment": "Scene 8: Using the print function for the username",
+      "speech": "Now we're using the print function to make text appear in the console. First, it'll print the string 'User:'.",
+      "elevenlabs": "[explaining] Now, we're using the print function to make text appear in the console. First, it'll print the string 'User:'."
+    },
+    {
+      "comment": "Scene 9: Printing the value of the username variable",
+      "speech": "Then we use a comma to tell it to print the username variable. When the program runs, it'll take the value from our username variable and use that to print.",
+      "elevenlabs": "[deliberate] Then, we use a comma to tell it to print the username variable. [important] When the program runs, it'll take the value from our username variable and use that to print."
+    },
+    {
+      "comment": "Scene 10: Using the print function for the level",
+      "speech": "The same thing happens with the next print line. First it prints the string 'Level:' with a colon, and then it prints the value of our level variable, which is four.",
+      "elevenlabs": "[continuing] The same thing happens with the next print line. First, it prints the string 'Level:' with a colon, and then it prints the value of our level variable, which is four."
+    },
+    {
+      "comment": "Scene 11: Important note about referencing variables",
+      "speech": "Notice that when you use variables, you don't put any quotes around them. That's what tells the computer to use the variable's value rather than the actual variable name.",
+      "elevenlabs": "[important] Notice that when you use variables, you [strongly] don't put any quotes around them. [emphatic] that's what tells the computer to use the variable's value rather than the actual variable name."
+    }
+  ]
+}
+
+```
+
+**Example 2:**
+*Input:*
+
+```
+{
+  "scenes": [
+    {
+      "comment": "Scene 1: Introduction to functions.",
+      "speech": "Welcome! This is a quick byte about functions."
+    },
+    {
+      "comment": "Scene 2: Definition of a function.",
+      "speech": "So, what exactly is a function? A function is a named block of code that performs a specific task. They are incredibly useful because they allow us to reuse code and organize our programs more efficiently. Let's see how functions work in code."
+    },
+    {
+      "comment": "Scene 3: Overview of a simple function program.",
+      "speech": "Here's a simple Python program that uses a function to print the greeting \"hello world\" to the screen. We'll go through this program step by step to understand how it works."
+    },
+    {
+      "comment": "Scene 4: Defining a function using the \"def\" keyword.",
+      "speech": "The first step is to define your function, which is where you give it a name and specify the commands you want it to run. We use the keyword \"def\" to indicate that we are defining a new function."
+    },
+    {
+      "comment": "Scene 5: Naming the function as \"greet\".",
+      "speech": "Next, we give our function a descriptive name. In this example, our function is called \"greet\"."
+    },
+    {
+      "comment": "Scene 6: Explaining the parentheses and colon in function definition.",
+      "speech": "When we define a function, we always include parenthesis and a colon. The colon tells the program we're about to enter the specific steps of our function."
+    },
+    {
+      "comment": "Scene 7: Explaining indentation for function body.",
+      "speech": "After the definition, each line of our function needs to be indented - otherwise we'll get a syntax error. This function just has one line: it'll print \"Hello World\"."
+    },
+    {
+      "comment": "Scene 8: Explaining how to call a function.",
+      "speech": "Once we've defined our function, the next step is to call it. You do that by typing the name of the function with its parenthesis. In our case, we'd type \"greet\" with an open and close parenthesis.\n\n"
+    },
+    {
+      "comment": "Scene 9: Describing the program flow when a function is called.",
+      "speech": "When the program runs and gets to this function, it will look up it's definition from earlier in the program..."
+    },
+    {
+      "comment": "Scene 10: Showing the execution of the function's code.",
+      "speech": "And then run the code inside the definition. In this case, it would print Hello World."
+    }
+  ],
+}
+
+```
+
+*Output:*
+
+```
+{
+  "scenes": [
+    {
+      "comment": "Scene 1: Introduction to functions.",
+      "speech": "Welcome! This is a quick byte about functions.",
+      "elevenlabs": "[warmly welcoming] Welcome! This is a quick byte about functions."
+    },
+    {
+      "comment": "Scene 2: Definition of a function.",
+      "speech": "So, what exactly is a function? A function is a named block of code that performs a specific task. They are incredibly useful because they allow us to reuse code and organize our programs more efficiently. Let's see how functions work in code.",
+      "elevenlabs": "[curious] So, what exactly is a function? [patiently] A function is a named block of code that performs a specific task. [enthusiastic] They are incredibly useful because they allow us to reuse code and organize our programs more efficiently. [thoughtful] Let's see how functions work in code."
+    },
+    {
+      "comment": "Scene 3: Overview of a simple function program.",
+      "speech": "Here's a simple Python program that uses a function to print the greeting \"hello world\" to the screen. We'll go through this program step by step to understand how it works.",
+      "elevenlabs": "[direct] Here's a simple Python program that uses a function to print the greeting \"hello world\" to the screen. [patiently] We'll go through this program step by step to understand how it works."
+    },
+    {
+      "comment": "Scene 4: Defining a function using the \"def\" keyword.",
+      "speech": "The first step is to define your function, which is where you give it a name and specify the commands you want it to run. We use the keyword \"def\" to indicate that we are defining a new function.",
+      "elevenlabs": "[deliberate] The first step is to define your function, which is where you give it a name and specify the commands you want it to run. [emphasized] We use the keyword \"def\" to indicate that we are defining a new function."
+    },
+    {
+      "comment": "Scene 5: Naming the function as \"greet\".",
+      "speech": "Next, we give our function a descriptive name. In this example, our function is called \"greet\".",
+      "elevenlabs": "[continuing] Next, we give our function a descriptive name. In this example, our function is called greet."
+    },
+    {
+      "comment": "Scene 6: Explaining the parentheses and colon in function definition.",
+      "speech": "When we define a function, we always include parenthesis and a colon. The colon tells the program we're about to enter the specific steps of our function.",
+      "elevenlabs": "[patiently] When we define a function, we always include parenthesis and a colon. [emphasized] The colon tells the program we're about to enter the specific steps of our function."
+    },
+    {
+      "comment": "Scene 7: Explaining indentation for function body.",
+      "speech": "After the definition, each line of our function needs to be indented - otherwise we'll get a syntax error. This function just has one line: it'll print \"Hello World\".",
+      "elevenlabs": "[important] After the definition, each line of our function needs to be indented - otherwise we'll get a syntax error. [explaining] This function just has one line: it'll print \"Hello World\"."
+    },
+    {
+      "comment": "Scene 8: Explaining how to call a function.",
+      "speech": "Once we've defined our function, the next step is to call it. You do that by typing the name of the function with its parenthesis. In our case, we'd type \"greet\" with an open and close parenthesis.\n\n",
+      "elevenlabs": "[thoughtful] Once we've defined our function, the next step is to call it. [direct] You do that by typing the name of the function with its parenthesis. [patiently] In our case, we'd type greet with an open and close parenthesis."
+    },
+    {
+      "comment": "Scene 9: Describing the program flow when a function is called.",
+      "speech": "When the program runs and gets to this function, it will look up it's definition from earlier in the program...",
+      "elevenlabs": "[explaining] When the program runs and gets to this function, it will look up its definition from earlier in the program... [short pause]"
+    },
+    {
+      "comment": "Scene 10: Showing the execution of the function's code.",
+      "speech": "And then run the code inside the definition. In this case, it would print Hello World.",
+      "elevenlabs": "[deliberate] And then run the code inside the definition. [excited] In this case, it would print Hello World!"
+    }
+  ],
+}
+
+```"""
 
 
 # ============================================
