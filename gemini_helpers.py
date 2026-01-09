@@ -416,6 +416,11 @@ You will receive an object (dictionary), with an array of objects, where each ob
 
 ```"""
 
+# ============================================
+# Constants
+# ============================================
+
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # ============================================
 # Main Functions
@@ -456,7 +461,7 @@ def generate_voiceover_scenes(gemini_client: genai.Client, pdf_base64: str) -> l
     
     # Call Gemini API
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=contents,
         config=config
     )
@@ -492,7 +497,7 @@ def add_elevenlabs_tags(gemini_client: genai.Client, scenes: list[dict]) -> list
     
     # Call Gemini API
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=json_str,
         config=config
     )
