@@ -1,9 +1,5 @@
 import streamlit as st
-import base64
 import json
-import uuid
-import traceback
-from google import genai
 from google_auth_oauthlib.flow import Flow
 
 # ============================================

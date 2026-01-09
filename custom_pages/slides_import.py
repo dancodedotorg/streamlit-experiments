@@ -1,9 +1,7 @@
 import streamlit as st
 import base64
-import json
 import traceback
-import uuid
-from slides import get_slides_data_cached, slides_to_pdf
+from helpers.google_slides_helpers import get_slides_data_cached, slides_to_pdf
 # Assuming google auth flow is handled in main app and creds are in session state
 
 def app_page():

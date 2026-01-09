@@ -1,23 +1,8 @@
-import google.auth
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-import google.auth.transport.requests
-from google.auth import default
 
-# for Google Slides speaker notes
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-
-import json
-import os.path
 import requests
 import base64
 import io
-import os
-import copy
-import uuid
-import re
 import streamlit as st
 
 # for HTML to PDF

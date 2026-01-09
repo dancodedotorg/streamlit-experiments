@@ -1,7 +1,7 @@
 import streamlit as st
 import traceback
 from voiceover_main import get_gemini_client
-from gemini_helpers import generate_voiceover_scenes
+from helpers.gemini_helpers import generate_voiceover_scenes
 
 def app_page():
     st.header("Step 2: Generate Voiceover Script")

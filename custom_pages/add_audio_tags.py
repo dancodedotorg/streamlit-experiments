@@ -1,7 +1,7 @@
 import streamlit as st
 import traceback
 from voiceover_main import get_gemini_client
-from gemini_helpers import add_elevenlabs_tags
+from helpers.gemini_helpers import add_elevenlabs_tags
 
 def app_page():
     st.header("Step 3: Add ElevenLabs Audio Tags")

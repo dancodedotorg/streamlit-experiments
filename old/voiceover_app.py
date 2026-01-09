@@ -8,12 +8,11 @@ with human review and editing between each step.
 import streamlit as st
 import base64
 import json
-import uuid
 import traceback
 from google import genai
 from google_auth_oauthlib.flow import Flow
-from gemini_helpers import generate_voiceover_scenes, add_elevenlabs_tags
-from slides import get_slides_data_cached, slides_to_pdf
+from helpers.gemini_helpers import generate_voiceover_scenes, add_elevenlabs_tags
+from helpers.google_slides_helpers import get_slides_data_cached, slides_to_pdf
 
 
 # ============================================

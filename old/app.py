@@ -2,7 +2,7 @@ import streamlit as st
 import json
 from google_auth_oauthlib.flow import Flow
 import base64
-from slides import get_slides_data_cached, slides_to_pdf
+from helpers.google_slides_helpers import get_slides_data_cached, slides_to_pdf
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
