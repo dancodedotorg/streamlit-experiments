@@ -108,7 +108,8 @@ def get_all_pngs_from_presentation(presentation_id, creds):
             data_uri = f'data:image/png;base64,{base64_string}'
 
             png_images.append(data_uri)
-            print(f"  ✅ Success: Base64 thumbnail generated ({len(base64_string)} chars).")
+            # print(f"  ✅ Success: Base64 thumbnail generated ({len(base64_string)} chars).")
+            st.write(f"  ✅ Success: Slide {i+1} thumbnail generated ({len(base64_string)} chars).")
         else:
             print("  ❌ Failure: No contentUrl found for thumbnail.")
 
@@ -124,27 +125,31 @@ def get_all_speaker_notes(presentation_id, creds):
     service = _build_slides_service(creds)
 
     # 🛑 DEBUG POINT 0: Confirm service object creation
-    print(f"--- Service created for Presentation ID: {presentation_id} ---")
+    # print(f"--- Service created for Presentation ID: {presentation_id} ---")
+    st.write(f"--- Service created for Presentation ID: {presentation_id} ---")
 
     try:
         # 🛑 DEBUG POINT 0.5: Confirm API call parameters
-        print(f"Attempting to fetch presentation structure with ID: {presentation_id}")
+        # print(f"Attempting to fetch presentation structure with ID: {presentation_id}")
+        st.write(f"Attempting to fetch presentation structure with ID: {presentation_id}")
 
         # This is the line that might be failing without being properly caught
         presentation = service.presentations().get(presentationId=presentation_id).execute()
 
         # If the API call succeeds, this print will appear
-        print("Successfully fetched presentation structure.")
+        # print("Successfully fetched presentation structure.")
+        st.write("✅ Successfully fetched presentation structure.")
 
         slides_data = presentation.get('slides', [])
 
         # This print should now appear before the loop starts
-        print(f"Found {len(slides_data)} slides. Starting individual slide processing...")
+        # print(f"Found {len(slides_data)} slides. Starting individual slide processing...")
+        st.write(f"Found {len(slides_data)} slides. Starting individual slide processing...")
 
     except Exception as e:
         # The script should always hit this if the API call fails
-        print(f"--- 🛑 CRITICAL ERROR FETCHING PRESENTATION STRUCTURE ---")
-        print(f"Error details: {type(e).__name__}: {e}")
+        st.write(f"--- 🛑 CRITICAL ERROR FETCHING PRESENTATION STRUCTURE ---")
+        st.write(f"Error details: {type(e).__name__}: {e}")
         return None
 
     all_notes = []

@@ -20,7 +20,7 @@ def app_page():
     st.divider()
     
     # Display full session state
-    st.subheader("🔍 Full Session State")
+    st.subheader("🔍 Screen-Readable View of Session State")
     
     # Create a JSON-serializable version of session state
     session_state_dict = {}
@@ -40,6 +40,8 @@ def app_page():
                 "count": len(value),
                 "sample": value[0] if value else None
             }
+        elif key == 'audio' and value:
+            session_state_dict[key] = f"<audio data, {len(value)} chars>"
         elif isinstance(value, (str, int, float, bool, type(None))):
             session_state_dict[key] = value
         elif isinstance(value, (list, dict)):

@@ -35,6 +35,9 @@ def app_page():
                     
                     # Store in session state
                     st.session_state.scenes = scenes
+                    # add empty 'html' property to each scene for later use
+                    for scene in scenes:
+                        scene['html'] = ''
                     
                     st.write(f"✅ Generated {len(scenes)} scenes!")
                     status.update(label="✅ Voiceover generation complete!", state="complete")
