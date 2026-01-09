@@ -2,7 +2,7 @@
 streamlit>=1.30.0
 
 # Google Gemini AI and Auth
-google-generativeai
+google-genai
 google-auth-oauthlib
 
 # ElevenLabs SDK
