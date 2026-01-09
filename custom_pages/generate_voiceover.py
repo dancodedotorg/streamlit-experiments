@@ -9,7 +9,8 @@ def app_page():
     
     if 'pdf_base64' not in st.session_state:
         st.error("❌ No PDF found in session. Please go back and upload a PDF.")
-        st.page_link("pages/1_upload.py", label="Upload PDF", type="secondary")
+        if st.button("Upload PDF", type="secondary"):
+            st.switch_page("custom_pages/upload.py")
     else:
         if st.button(
             "🎬 Generate Voiceover Script",
@@ -115,11 +116,11 @@ def app_page():
                 )
             
             with col4:
-                st.page_link(
-                    "pages/3_add_audio_tags.py",
-                    label="▶️ Continue",
+                if st.button(
+                    "▶️ Continue",
                     disabled=not voiceover_approved,
                     width="stretch"
-                )
+                ):
+                    st.switch_page("custom_pages/add_audio_tags.py")
 
 app_page()

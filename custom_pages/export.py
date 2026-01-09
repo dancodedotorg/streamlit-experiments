@@ -76,7 +76,7 @@ def app_page():
                 if key in st.session_state:
                     del st.session_state[key]
             # Rerun to clear page content and implicitely refresh navigation to main
-            st.page_link("voiceover_main.py", label="") # Navigate to the initial page
+            st.switch_page("custom_pages/settings.py")
             st.rerun()
 
 app_page()

@@ -106,8 +106,7 @@ def app_page():
             for key in ['slides_data', 'pdf_base64', 'scenes', 'refined_scenes', 'voiceover_approved', 'final_approved']:
                 if key in st.session_state:
                     del st.session_state[key]
-            st.page_link("voiceover_main.py", label="", icon="🏠")
-            st.rerun()
+            st.switch_page("custom_pages/settings.py")
 
     with col2:
         if st.button("🔄 Reset All Session State Here", width="stretch"):

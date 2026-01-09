@@ -2,6 +2,7 @@ import streamlit as st
 import base64
 import json
 import traceback
+import uuid
 from slides import get_slides_data_cached, slides_to_pdf
 # Assuming google auth flow is handled in main app and creds are in session state
 
@@ -24,8 +25,8 @@ def app_page():
         with col1:
             load_slides_btn = st.button("📥 Load Slides", width="stretch")
         with col2:
-            # The skip button here would navigate to the next page
-            st.page_link("pages/1_upload.py", label="⏭️ Skip", width="stretch")
+            if st.button("⏭️ Skip to Upload", width="stretch"):
+                st.switch_page("custom_pages/upload.py")
         
         if load_slides_btn:
             if not presentation_id:
@@ -68,7 +69,7 @@ def app_page():
                 slide = slide_item.copy()
                 slide_index = slide["index"]
                 
-                with st.expander(f"Slide {idx + 1}", expanded=False):
+                with st.expander(f"Slide {idx + 1}", expanded=True):
                     col1, col2, col3 = st.columns([2, 3, 1])
                     
                     with col1:
@@ -88,7 +89,7 @@ def app_page():
                             "Edit notes:",
                             value=slide.get("notes", ""),
                             height=150,
-                            key=f"notes_{uuid.uuid4()}", # Use uuid for unique key generation
+                            key=f"notes_{slide_index}",
                             label_visibility="collapsed"
                         )
                         # Update notes in current slide_item (original object reference)
@@ -124,7 +125,8 @@ def app_page():
             
             with col2:
                 if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
-                    st.page_link("pages/1_upload.py", label="▶️ Continue", width="stretch")
+                    if st.button("▶️ Continue to Upload", width="stretch"):
+                        st.switch_page("custom_pages/upload.py")
             
             # Display PDF preview if available
             if "pdf_base64" in st.session_state and st.session_state.pdf_base64:

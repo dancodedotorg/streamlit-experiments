@@ -115,11 +115,11 @@ def app_page():
             )
         
         with col4:
-            st.page_link(
-                "pages/4_export.py",
-                label="▶️ Continue",
+            if st.button(
+                "▶️ Continue",
                 disabled=not final_approved,
                 width="stretch"
-            )
+            ):
+                st.switch_page("custom_pages/export.py")
 
 app_page()
