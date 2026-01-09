@@ -15,7 +15,7 @@ def app_page():
         "🎨 Add Audio Tags",
         type="primary",
         disabled=st.session_state.is_processing,
-        use_container_width=True
+        width="stretch"
     ):
         st.session_state.is_processing = True
         
@@ -97,12 +97,12 @@ def app_page():
         col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
         
         with col1:
-            if st.button("💾 Save Final Edits", use_container_width=True):
+            if st.button("💾 Save Final Edits", width="stretch"):
                 st.session_state.refined_scenes = edited_refined
                 st.success("✅ Final edits saved!")
         
         with col2:
-            if st.button("🔄 Regenerate Tags", use_container_width=True):
+            if st.button("🔄 Regenerate Tags", width="stretch"):
                 # This effectively re-runs the current page, triggering regeneration
                 st.session_state.is_processing = False # Reset for next attempt
                 st.session_state.refined_scenes = None # Clear old refined scenes to force regeneration
@@ -117,10 +117,9 @@ def app_page():
         with col4:
             st.page_link(
                 "pages/4_export.py",
-                label="▶️",
+                label="▶️ Continue",
                 disabled=not final_approved,
-                use_container_width=True,
-                type="primary"
+                width="stretch"
             )
 
 app_page()

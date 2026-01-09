@@ -170,7 +170,7 @@ if st.session_state.slides_data:
                     key=f"remove_{slide_index}",
                     on_click=remove_slide,
                     args=(slide_index,),
-                    use_container_width=True
+                    width="stretch"
                 )
     
     # Export option

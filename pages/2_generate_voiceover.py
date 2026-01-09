@@ -15,7 +15,7 @@ def app_page():
             "🎬 Generate Voiceover Script",
             type="primary",
             disabled=st.session_state.is_processing,
-            use_container_width=True
+            width="stretch"
         ):
             st.session_state.is_processing = True
             
@@ -98,12 +98,12 @@ def app_page():
             col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
             
             with col1:
-                if st.button("💾 Save Edits", use_container_width=True):
+                if st.button("💾 Save Edits", width="stretch"):
                     st.session_state.scenes = edited_scenes
                     st.success("✅ Edits saved!")
             
             with col2:
-                if st.button("🔄 Regenerate Script", use_container_width=True):
+                if st.button("🔄 Regenerate Script", width="stretch"):
                     # This effectively re-runs the current page, triggering regeneration
                     st.session_state.is_processing = False # Reset for next attempt
                     st.rerun()
@@ -117,10 +117,9 @@ def app_page():
             with col4:
                 st.page_link(
                     "pages/3_add_audio_tags.py",
-                    label="▶️",
+                    label="▶️ Continue",
                     disabled=not voiceover_approved,
-                    use_container_width=True,
-                    type="primary"
+                    width="stretch"
                 )
 
 app_page()

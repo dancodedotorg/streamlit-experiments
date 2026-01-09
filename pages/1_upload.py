@@ -18,7 +18,7 @@ def app_page():
         
         with col2:
             # Link to the next step
-            st.page_link("pages/2_generate_voiceover.py", label="▶️ Continue", type="primary", use_container_width=True)
+            st.page_link("pages/2_generate_voiceover.py", label="▶️ Continue", width="stretch")
     else:
         uploaded_file = st.file_uploader(
             "Choose a PDF file",
@@ -37,7 +37,7 @@ def app_page():
                 st.caption(f"📦 **Size:** {pdf_data['size']:,} bytes")
             with col3:
                 # Link to the next step
-                st.page_link("pages/2_generate_voiceover.py", label="▶️ Next", type="primary", use_container_width=True)
+                st.page_link("pages/2_generate_voiceover.py", label="▶️ Next", width="stretch")
         else:
             st.warning("📤 Please upload a PDF file to continue")
 

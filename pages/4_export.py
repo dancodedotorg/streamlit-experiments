@@ -42,7 +42,7 @@ def app_page():
                 data=json.dumps(output_json, indent=2),
                 file_name="voiceover_scenes.json",
                 mime="application/json",
-                use_container_width=True
+                width="stretch"
             )
         
         with col2:
@@ -57,7 +57,7 @@ def app_page():
                 data=script_text,
                 file_name="voiceover_script.txt",
                 mime="text/plain",
-                use_container_width=True
+                width="stretch"
             )
         
         st.divider()
@@ -70,7 +70,7 @@ def app_page():
                 st.divider()
         
         # Start over button. This will reset relevant session state and navigate to the first page.
-        if st.button("🔄 Create New Project", use_container_width=True, type="primary"):
+        if st.button("🔄 Create New Project", width="stretch", type="primary"):
             # Clear relevant session state here
             for key in ['slides_data', 'pdf_base64', 'scenes', 'refined_scenes', 'voiceover_approved', 'final_approved']:
                 if key in st.session_state:

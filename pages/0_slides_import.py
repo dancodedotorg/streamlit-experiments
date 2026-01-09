@@ -11,11 +11,7 @@ def app_page():
     
     # Check Google authentication
     if "creds" not in st.session_state:
-        st.warning("⚠️ Please authenticate with Google in the sidebar to import slides.")
-        col1, col2 = st.columns(2)
-        with col2:
-            # The skip button here would navigate to the next page, but needs a way to do it
-            st.page_link("voiceover_main.py", label="⏭️ Skip to Upload PDF", type="secondary", use_container_width=True)
+        st.warning("⚠️ Please authenticate with Google in main page to import slides.")
     else:
         # Slide Presentation ID Input
         presentation_id = st.text_input(
@@ -26,10 +22,10 @@ def app_page():
         
         col1, col2 = st.columns([3, 1])
         with col1:
-            load_slides_btn = st.button("📥 Load Slides", type="primary", use_container_width=True)
+            load_slides_btn = st.button("📥 Load Slides", width="stretch")
         with col2:
             # The skip button here would navigate to the next page
-            st.page_link("pages/1_upload.py", label="⏭️ Skip", use_container_width=True)
+            st.page_link("pages/1_upload.py", label="⏭️ Skip", width="stretch")
         
         if load_slides_btn:
             if not presentation_id:
@@ -104,7 +100,7 @@ def app_page():
                             key=f"remove_{idx}", # Use idx for unique key
                             on_click=remove_slide_callback,
                             args=(idx,), # Pass idx to callback to remove the correct slide
-                            use_container_width=True
+                            width="stretch"
                         )
             
             # Generate PDF from slides
@@ -113,7 +109,7 @@ def app_page():
             
             col1, col2 = st.columns([2, 1])
             with col1:
-                if st.button("🎨 Create PDF from Slides", type="primary", use_container_width=True):
+                if st.button("🎨 Create PDF from Slides", width="stretch"):
                     with st.spinner("Generating PDF..."):
                         try:
                             # Generate PDF from slides
@@ -128,7 +124,7 @@ def app_page():
             
             with col2:
                 if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
-                    st.page_link("pages/1_upload.py", label="▶️ Continue", type="primary", use_container_width=True)
+                    st.page_link("pages/1_upload.py", label="▶️ Continue", width="stretch")
             
             # Display PDF preview if available
             if "pdf_base64" in st.session_state and st.session_state.pdf_base64:
@@ -148,7 +144,7 @@ def app_page():
                     data=pdf_bytes,
                     file_name="slides_presentation.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
 
 app_page()

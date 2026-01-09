@@ -101,7 +101,7 @@ def app_page():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🏠 Go to Start", use_container_width=True):
+        if st.button("🏠 Go to Start", width="stretch"):
             # Clear relevant session state here for a fresh start for the workflow
             for key in ['slides_data', 'pdf_base64', 'scenes', 'refined_scenes', 'voiceover_approved', 'final_approved']:
                 if key in st.session_state:
@@ -110,7 +110,7 @@ def app_page():
             st.rerun()
 
     with col2:
-        if st.button("🔄 Reset All Session State Here", use_container_width=True):
+        if st.button("🔄 Reset All Session State Here", width="stretch"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.success("Session reset!")

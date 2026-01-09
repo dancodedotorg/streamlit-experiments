@@ -67,7 +67,10 @@ def get_gemini_client():
     """Initialize and cache the Gemini client."""
     api_key = st.secrets.get("GEMINI_API_KEY", None)
     if not api_key:
-        st.error("❌ GEMINI_API_KEY not found in secrets. Please add it to .streamlit/secrets.toml")
+        api_key = st.session_state.get("gemini_api_key", None)
+    
+    if not api_key:
+        st.error("❌ GEMINI_API_KEY not found in Streamlit secrets or session state. Please add it.")
         st.stop()
     return genai.Client(api_key=api_key)
 
@@ -105,6 +108,10 @@ def initialize_session_state():
         st.session_state.voiceover_approved = False
     if 'final_approved' not in st.session_state:
         st.session_state.final_approved = False
+    if 'gemini_api_key' not in st.session_state:
+        st.session_state.gemini_api_key = ''
+    if 'elevenlabs_api_key' not in st.session_state:
+        st.session_state.elevenlabs_api_key = ''
 
 
 # ==============================
@@ -127,40 +134,46 @@ initialize_session_state()
 
 
 # ============================================
-# Main App Content (empty, as pages handle steps) # This comment is only for my internal thoughts
+# Main Content - API Key Inputs and Google Auth UI
 # ============================================
 
-# The main content area of the app will be rendered by the selected page.
-# This file primarily sets up global configurations and a common sidebar.
+st.subheader("Configure API Keys")
+
+gemini_api_key_input = st.text_input("Google Gemini API Key", type="password", value=st.session_state.gemini_api_key)
+if gemini_api_key_input:
+    st.session_state.gemini_api_key = gemini_api_key_input
+
+elevenlabs_api_key_input = st.text_input("ElevenLabs API Key (for audio tags)", type="password", value=st.session_state.elevenlabs_api_key)
+if elevenlabs_api_key_input:
+    st.session_state.elevenlabs_api_key = elevenlabs_api_key_input
+
+st.markdown("--- ")
+
+st.subheader("🔐 Google Account Authentication")
+if "creds" not in st.session_state:
+    st.info("Not authenticated with Google. Required for Google Slides import.")
+    try:
+        flow = get_google_oauth_flow()
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        auth_link = f'<a href="{auth_url}" target="_self"><button style="background-color: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%;">Log in with Google</button></a>'
+        st.markdown(auth_link, unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error setting up Google authentication: {e}")
+else:
+    st.success("✅ Authenticated with Google")
+    if st.button("Sign out of Google", width="stretch"):
+        del st.session_state.creds
+        st.rerun()
+
+st.markdown("--- ")
+
+# The rest of the content will be in respective pages/ files
 
 # ============================================
-# Sidebar - Google Auth and Developer Options
+# Sidebar - Developer Options
 # ============================================
 
 with st.sidebar:
-    # Google Authentication
-    st.header("🔐 Google Authentication")
-    
-    if "creds" not in st.session_state:
-        st.info("Not authenticated with Google")
-        try:
-            flow = get_google_oauth_flow()
-            auth_url, _ = flow.authorization_url(prompt='consent')
-            
-            # Custom HTML button to open in the same tab
-            auth_link = f'<a href="{auth_url}" target="_self"><button style="background-color: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%;">Log in with Google</button></a>'
-            st.markdown(auth_link, unsafe_allow_html=True)
-            st.caption("Required for Google Slides import")
-        except Exception as e:
-            st.error(f"Error setting up Google authentication: {e}")
-    else:
-        st.success("✅ Authenticated with Google")
-        if st.button("Sign out of Google", use_container_width=True):
-            del st.session_state.creds
-            st.rerun()
-    
-    st.divider()
-    
     # Developer options
     with st.expander("🔧 Developer Options"):
         if st.button("Clear Resource Cache"):
