@@ -1,28 +1,38 @@
 """
-ElevenLabs Audio Tag Agent for ADK Web
+Gemini API Helper Functions for Voiceover Pipeline
 
-This agent enhances voiceover scripts with ElevenLabs audio tags.
-Compatible with both `adk web` and Streamlit applications.
+This module provides simplified functions for:
+1. Generating voiceover scripts from PDF slides
+2. Adding ElevenLabs audio tags to voiceover scripts
+
+Uses direct Gemini SDK calls (no ADK framework).
 """
 
-import os
+import base64
 import json
-from typing import AsyncGenerator, List
-from google.adk.agents import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
-from google.adk.events import Event, EventActions
-from google.genai import types
-from google.genai.types import Content, Part
+from typing import List
 from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 
-# --------------------------------------------------------------------------------
+# ============================================
 # Pydantic Models for Structured Outputs
-# --------------------------------------------------------------------------------
+# ============================================
+
+class Scene(BaseModel):
+    """A single scene containing a comment and speech"""
+    comment: str = Field(description="A 1-sentence metadata comment for the generated scene")
+    speech: str = Field(description="The voiceover speech for this particular scene")
+
+
+class SceneList(BaseModel):
+    """A list of one or more scenes."""
+    scenes: List[Scene]
+
 
 class RefinedScene(BaseModel):
-    """A single scene containing a comment, speech, and elevenlabs audio tags"""
+    """A single scene with original content plus ElevenLabs audio tags"""
     comment: str = Field(description="A 1-sentence metadata comment for the generated scene")
     speech: str = Field(description="The voiceover speech for this particular scene")
     elevenlabs: str = Field(description="The augmented ElevenLabs voiceover with audio tags")
@@ -33,13 +43,34 @@ class RefinedSceneList(BaseModel):
     scenes: List[RefinedScene]
 
 
-# --------------------------------------------------------------------------------
-# Configuration
-# --------------------------------------------------------------------------------
+# ============================================
+# System Prompts
+# ============================================
 
-GEMINI_MODEL = "gemini-2.5-flash"
+VOICEOVER_SYSTEM_PROMPT = """You are generating voiceover scripts for a high school introductory Python course. You will be provided a set of slides - for each slide: generate a voiceover narration explaining the content of the slide.
 
-SYSTEM_PROMPT = """# 1. General Instructions - Creating Audio Tags
+- DO act as a patient, clear, concise, warm tutor who is helping to explain concepts and key steps to students.
+- DO generate a voiceover for each uniqe slide and do not combine slides.
+- Do NOT use academic vocabulary other than what is included in the slides. Instead, use language appropriate for a teenager.
+- Do NOT include markdown text such as ** or `` in your voiceover
+- Do NOT vary significantly from the content on the slides, and keep explanations short and concise for each slide.
+- Do NOT mention the Unit Guide - focus only on the concept and skill being introduced in the slides.
+- DO format your response as a JSON object with the property "scenes", then an array of objects with properties "comment" and "speech".
+
+ Here is an example of a speeches that follows these guidelines:
+- 'Welcome! This is a quick byte about functions.
+- "So, what exactly is a function? A function is a named block of code that performs a specific task. They are incredibly useful because they allow us to reuse code and organize our programs more efficiently. Let's see how functions work in code."
+- 'Here's a simple Python program that uses a function to print the greeting "hello world" to the screen. We'll go through this program step by step to understand how it works.'
+- 'The first step is to define your function, which is where you give it a name and specify the commands you want it to run. We use the keyword "def" to indicate that we are defining a new function.
+- 'Next, we give our function a descriptive name. In this example, our function is called "greet".'
+- "When we define a function, we always include parenthesis and a colon. The colon tells the program we're about to enter the specific steps of our function."
+- 'speech': 'After the definition, each line of our function needs to be indented - otherwise we'll get a syntax error. This function just has one line: it'll print "Hello World".'
+- 'Once we've defined our function, the next step is to call it. You do that by typing the name of the function with its parenthesis. In our case, we'd type "greet" with an open and close parenthesis.'
+- "When the program runs and gets to this function, it will look up it's definition from earlier in the program..."
+- 'And then run the code inside the definition. In this case, it would print Hello World.'"""
+
+
+ELEVENLABS_SYSTEM_PROMPT = """# 1. General Instructions - Creating Audio Tags
 
 **Role and Goal**: You are an AI assistant specializing in enhancing dialogue text for speech generation.
 
@@ -152,125 +183,86 @@ You will receive an object (dictionary), with an array of objects, where each ob
 * The output should maintain the narrative flow of the original dialogue."""
 
 
-# --------------------------------------------------------------------------------
-# ElevenLabsAgent Class
-# --------------------------------------------------------------------------------
+# ============================================
+# Main Functions
+# ============================================
 
-class ElevenLabsAgent(BaseAgent):
+def generate_voiceover_scenes(gemini_client: genai.Client, pdf_base64: str) -> list[dict]:
     """
-    Custom agent that adds ElevenLabs audio tags to voiceover scripts.
-    Reads scenes from session state and saves refined scenes.
-    """
-    
-    def __init__(self, gemini_client, name="ElevenLabsAgent"):
-        super().__init__(
-            name=name,
-            description="Enhances voiceover scripts with ElevenLabs audio tags for expressive speech"
-        )
-        # Store as private attributes (underscore prefix) to avoid Pydantic field conflicts
-        self._gemini_client = gemini_client
-        self._model = GEMINI_MODEL
-    
-    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        """
-        Process scenes from session state and add ElevenLabs audio tags.
-        """
-        # Get scenes from session state
-        scenes = ctx.session.state.get('scenes')
-        
-        if not scenes:
-            error_msg = "No scenes found in session state. Please generate voiceover scripts first."
-            yield Event(
-                author=self.name,
-                content=Content(parts=[Part(text=error_msg)])
-            )
-            return
-        
-        # Format scenes as JSON string for the agent
-        json_str = json.dumps({"scenes": scenes})
-        
-        # Build formatted parts for Gemini API
-        formatted_parts = [json_str]
-        
-        # Configure generation
-        generate_content_config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=RefinedSceneList,
-            system_instruction=SYSTEM_PROMPT
-        )
-        
-        # Generate content
-        response = self._gemini_client.models.generate_content(
-            model=self._model,
-            contents=formatted_parts,
-            config=generate_content_config
-        )
-        
-        # Parse response
-        data = json.loads(response.text)
-        refined_scenes = data.get("scenes", [])
-        
-        # Save to session state
-        ctx.session.state['refined_scenes'] = refined_scenes
-        
-        # Create response message
-        result_msg = f"Added ElevenLabs audio tags to {len(refined_scenes)} scenes."
-        
-        # Yield event with results
-        yield Event(
-            author=self.name,
-            content=Content(parts=[Part(text=result_msg)]),
-            actions=EventActions(state_delta={'refined_scenes': refined_scenes})
-        )
-
-
-# --------------------------------------------------------------------------------
-# Factory Function for Streamlit/External Use
-# --------------------------------------------------------------------------------
-
-def create_elevenlabs_agent(gemini_client):
-    """
-    Factory function to create an ElevenLabsAgent.
+    Generate voiceover scenes from a PDF using Gemini API.
     
     Args:
-        gemini_client: Initialized Google Gemini client
+        gemini_client: Initialized genai.Client instance
+        pdf_base64: Base64-encoded PDF bytes
         
     Returns:
-        ElevenLabsAgent instance
+        List of scene dictionaries with 'comment' and 'speech' keys
+        
+    Raises:
+        Exception: If API call fails or response parsing fails
     """
-    return ElevenLabsAgent(gemini_client=gemini_client)
-
-
-# --------------------------------------------------------------------------------
-# ADK Web Root Agent Definition
-# --------------------------------------------------------------------------------
-
-# Initialize Gemini client using API key from environment
-# The API key should be set in a .env file in this directory
-api_key = os.environ.get("GOOGLE_API_KEY")
-
-if not api_key:
-    print("WARNING: GOOGLE_API_KEY environment variable not set.")
-    print("Please create a .env file in the elevenlabs_agent directory with:")
-    print("GOOGLE_API_KEY=your_api_key_here")
-
-# Initialize the Gemini client
-client = genai.Client(api_key=api_key) if api_key else None
-
-# Create the root agent for ADK Web
-if client:
-    root_agent = ElevenLabsAgent(gemini_client=client, name="elevenlabs_agent")
-else:
-    # Create a placeholder that will fail gracefully if API key is missing
-    class PlaceholderAgent(BaseAgent):
-        async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-            error_msg = "Agent not initialized. Please set GOOGLE_API_KEY in .env file."
-            yield Event(
-                author=self.name,
-                content=Content(parts=[Part(text=error_msg)])
-            )
+    # Decode PDF from base64
+    pdf_bytes = base64.b64decode(pdf_base64)
     
-    root_agent = PlaceholderAgent(
-        name="elevenlabs_agent",
-        description="ElevenLabs agent (not initialized - missing API key)"
+    # Build content parts for the API call
+    contents = [
+        "Analyze the slides in this PDF and generate voiceover scripts.",
+        types.Part.from_bytes(
+            data=pdf_bytes,
+            mime_type="application/pdf"
+        )
+    ]
+    
+    # Configure structured output generation
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=SceneList,
+        system_instruction=VOICEOVER_SYSTEM_PROMPT
     )
+    
+    # Call Gemini API
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=contents,
+        config=config
+    )
+    
+    # Parse and return scenes
+    data = json.loads(response.text)
+    return data.get("scenes", [])
+
+
+def add_elevenlabs_tags(gemini_client: genai.Client, scenes: list[dict]) -> list[dict]:
+    """
+    Add ElevenLabs audio tags to voiceover scenes using Gemini API.
+    
+    Args:
+        gemini_client: Initialized genai.Client instance
+        scenes: List of scene dictionaries with 'comment' and 'speech' keys
+        
+    Returns:
+        List of refined scene dictionaries with added 'elevenlabs' key
+        
+    Raises:
+        Exception: If API call fails or response parsing fails
+    """
+    # Format scenes as JSON string
+    json_str = json.dumps({"scenes": scenes})
+    
+    # Configure structured output generation
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=RefinedSceneList,
+        system_instruction=ELEVENLABS_SYSTEM_PROMPT
+    )
+    
+    # Call Gemini API
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=json_str,
+        config=config
+    )
+    
+    # Parse and return refined scenes
+    data = json.loads(response.text)
+    return data.get("scenes", [])

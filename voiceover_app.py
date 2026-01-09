@@ -1,24 +1,18 @@
 """
 Voiceover Pipeline - Streamlit App with Human-in-the-Loop
 
-This app uses ADK agents to generate and refine voiceover scripts,
+This app uses direct Gemini API calls to generate and refine voiceover scripts,
 with human review and editing between each step.
 """
 
 import streamlit as st
-import asyncio
 import base64
 import json
 import uuid
 import traceback
-import time
 from google import genai
-from google.genai.types import Content, Part
-from google.adk.sessions import InMemorySessionService
-from google.adk.runners import Runner
 from google_auth_oauthlib.flow import Flow
-from voiceover_agent.agent import create_voiceover_agent
-from elevenlabs_agent.agent import create_elevenlabs_agent
+from gemini_helpers import generate_voiceover_scenes, add_elevenlabs_tags
 from slides import get_slides_data_cached, slides_to_pdf
 
 
@@ -73,22 +67,6 @@ def get_gemini_client():
     return genai.Client(api_key=api_key)
 
 
-@st.cache_resource
-def get_session_service():
-    """Initialize and cache the ADK session service."""
-    return InMemorySessionService()
-
-
-@st.cache_resource
-def get_voiceover_agent(_gemini_client):
-    """Create and cache the voiceover agent."""
-    return create_voiceover_agent(_gemini_client)
-
-
-@st.cache_resource
-def get_elevenlabs_agent(_gemini_client):
-    """Create and cache the ElevenLabs agent."""
-    return create_elevenlabs_agent(_gemini_client)
 
 
 # ============================================
@@ -111,27 +89,11 @@ def process_pdf(pdf_bytes):
 
 def initialize_session_state():
     """Initialize all session state keys with defaults."""
-    if 'session_service' not in st.session_state:
-        st.session_state.session_service = get_session_service()
-    
-    if 'app_name' not in st.session_state:
-        # Use a simple app name that won't conflict with file paths
-        st.session_state.app_name = "voiceover_app"
-    
-    if 'user_id' not in st.session_state:
-        st.session_state.user_id = f"user_{uuid.uuid4().hex[:8]}"
-    
-    if 'session_id' not in st.session_state:
-        st.session_state.session_id = f"session_{uuid.uuid4().hex[:8]}"
-    
     if 'workflow_state' not in st.session_state:
         st.session_state.workflow_state = 'slides_import'  # Start with slides import
     
     if 'is_processing' not in st.session_state:
         st.session_state.is_processing = False
-    
-    if 'adk_session' not in st.session_state:
-        st.session_state.adk_session = None
     
     # Google Slides state
     if 'slides_data' not in st.session_state:
@@ -164,12 +126,10 @@ initialize_session_state()
 WORKFLOW_STATES = {
     'slides_import': {'next': 'upload', 'display': '📊 Import Slides', 'step': 0},
     'upload': {'next': 'generate_voiceover', 'display': '📤 Upload /PDF', 'step': 1},
-    'generate_voiceover': {'next': 'review_voiceover', 'display': '🎬 Generate Script', 'step': 2},
-    'review_voiceover': {'next': 'add_audio_tags', 'display': '✏️ Review Script', 'step': 3},
-    'add_audio_tags': {'next': 'review_final', 'display': '🎨 Add Audio Tags', 'step': 4},
-    'review_final': {'next': 'export', 'display': '👀 Final Review', 'step': 5},
-    'export': {'next': 'debug', 'display': '📥 Export', 'step': 6},
-    'debug': {'next': None, 'display': '🔧 Debug', 'step': 7}
+    'generate_voiceover': {'next': 'add_audio_tags', 'display': '🎬 Generate & Review Script', 'step': 2},
+    'add_audio_tags': {'next': 'export', 'display': '🎨 Add Audio Tags & Review', 'step': 3},
+    'export': {'next': 'debug', 'display': '📥 Export', 'step': 4},
+    'debug': {'next': None, 'display': '🔧 Debug', 'step': 5}
 }
 
 
@@ -289,10 +249,7 @@ with st.sidebar:
     
     # Developer options
     with st.expander("🔧 Developer Options"):
-        st.caption("**Session Info**")
-        st.code(f"User: {st.session_state.user_id}\nSession: {st.session_state.session_id}", language=None)
-        
-        if st.button("Clear Agent Cache"):
+        if st.button("Clear Resource Cache"):
             st.cache_resource.clear()
             st.success("Agent cache cleared!")
             st.rerun()
@@ -508,7 +465,7 @@ elif st.session_state.workflow_state == 'upload':
 
 
 # ============================================
-# STEP 2: Generate Voiceover
+# STEP 2: Generate & Review Voiceover
 # ============================================
 
 elif st.session_state.workflow_state == 'generate_voiceover':
@@ -517,9 +474,6 @@ elif st.session_state.workflow_state == 'generate_voiceover':
     
     if 'pdf_base64' not in st.session_state:
         st.error("❌ No PDF found. Please go back and upload a PDF.")
-        if st.button("↩️ Go Back"):
-            st.session_state.workflow_state = 'upload'
-            st.rerun()
     else:
         if st.button(
             "🎬 Generate Voiceover Script",
@@ -531,72 +485,25 @@ elif st.session_state.workflow_state == 'generate_voiceover':
             
             try:
                 with st.status("Generating voiceover script...", expanded=True) as status:
-                    # Get resources
+                    # Get Gemini client
                     gemini_client = get_gemini_client()
-                    voiceover_agent = get_voiceover_agent(gemini_client)
-                    session_service = st.session_state.session_service
                     
-                    st.write("🔄 Preparing session with PDF data...")
-                    # Create session with initial state containing PDF
-                    async def ensure_session_with_pdf():
-                        session = await session_service.get_session(
-                            app_name=st.session_state.app_name,
-                            user_id=st.session_state.user_id,
-                            session_id=st.session_state.session_id
-                        )
-                        if session is None:
-                            # Create with initial state
-                            session = await session_service.create_session(
-                                app_name=st.session_state.app_name,
-                                user_id=st.session_state.user_id,
-                                session_id=st.session_state.session_id,
-                                state={'pdf_base64': st.session_state.pdf_base64}
-                            )
-                        else:
-                            # Session exists, update its state
-                            session.state['pdf_base64'] = st.session_state.pdf_base64
+                    st.write("🤖 Calling Gemini API to analyze PDF...")
                     
-                    asyncio.run(ensure_session_with_pdf())
-                    
-                    st.write("🔄 Preparing runner...")
-                    runner = Runner(
-                        agent=voiceover_agent,
-                        app_name=st.session_state.app_name,
-                        session_service=session_service
+                    # Direct API call - no agent, no runner, no async complexity
+                    scenes = generate_voiceover_scenes(
+                        gemini_client=gemini_client,
+                        pdf_base64=st.session_state.pdf_base64
                     )
                     
-                    st.write("🤖 Running voiceover agent...")
-                    # Prepare message as Content object (required by ADK)
-                    content = Content(role='user', parts=[Part(text="Generate voiceover from PDF")])
-                    
-                    # Use synchronous run() for Streamlit (not run_async)
-                    for event in runner.run(
-                        user_id=st.session_state.user_id,
-                        session_id=st.session_state.session_id,
-                        new_message=content  # Must be Content object
-                    ):
-                        if event.is_final_response():
-                            st.write("✅ Agent completed!")
-                    
-                    # Get updated session with scenes
-                    async def get_scenes():
-                        session = await session_service.get_session(
-                            app_name=st.session_state.app_name,
-                            user_id=st.session_state.user_id,
-                            session_id=st.session_state.session_id
-                        )
-                        if session:
-                            return session.state.get('scenes', [])
-                        return []
-                    
-                    scenes = asyncio.run(get_scenes())
+                    # Store in session state
                     st.session_state.scenes = scenes
                     
-                    st.write(f"✅ Generated {len(st.session_state.scenes)} scenes!")
+                    st.write(f"✅ Generated {len(scenes)} scenes!")
                     status.update(label="✅ Voiceover generation complete!", state="complete")
                 
                 st.session_state.is_processing = False
-                advance_workflow()
+                # advance_workflow()
                 st.rerun()
                 
             except Exception as e:
@@ -606,29 +513,14 @@ elif st.session_state.workflow_state == 'generate_voiceover':
                 with st.expander("🔍 Error Details"):
                     st.code(traceback.format_exc())
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🔄 Retry"):
-                        st.rerun()
-                with col2:
-                    if st.button("↩️ Go Back"):
-                        st.session_state.workflow_state = 'upload'
-                        st.rerun()
+                if st.button("🔄 Retry Voiceover"):
+                    st.rerun()
 
 
-# ============================================
-# STEP 3: Review and Edit Voiceover
-# ============================================
-
-elif st.session_state.workflow_state == 'review_voiceover':
-    st.header("Step 3: Review & Edit Voiceover Script")
+# elif st.session_state.workflow_state == 'review_voiceover':
+    # st.header("Step 3: Review & Edit Voiceover Script")
     
-    if 'scenes' not in st.session_state or not st.session_state.scenes:
-        st.error("❌ No scenes found. Please generate voiceover first.")
-        if st.button("↩️ Go Back"):
-            st.session_state.workflow_state = 'generate_voiceover'
-            st.rerun()
-    else:
+    if 'scenes' in st.session_state and st.session_state.scenes:
         st.info(f"💡 Review and edit the {len(st.session_state.scenes)} generated scenes. Make any changes you'd like before continuing.")
         
         # Editable scenes
@@ -676,17 +568,6 @@ elif st.session_state.workflow_state == 'review_voiceover':
         with col1:
             if st.button("💾 Save Edits", use_container_width=True):
                 st.session_state.scenes = edited_scenes
-                # Update ADK session
-                async def save_scenes():
-                    session = await st.session_state.session_service.get_session(
-                        app_name=st.session_state.app_name,
-                        user_id=st.session_state.user_id,
-                        session_id=st.session_state.session_id
-                    )
-                    if session:
-                        # For InMemorySessionService, direct state modification works
-                        session.state['scenes'] = edited_scenes
-                asyncio.run(save_scenes())
                 st.success("✅ Edits saved!")
         
         with col2:
@@ -704,36 +585,21 @@ elif st.session_state.workflow_state == 'review_voiceover':
             if st.button("▶️", disabled=not voiceover_approved, use_container_width=True, type="primary"):
                 # Save final edits before continuing
                 st.session_state.scenes = edited_scenes
-                async def save_and_continue():
-                    session = await st.session_state.session_service.get_session(
-                        app_name=st.session_state.app_name,
-                        user_id=st.session_state.user_id,
-                        session_id=st.session_state.session_id
-                    )
-                    if session:
-                        # For InMemorySessionService, direct state modification works
-                        session.state['scenes'] = edited_scenes
-                asyncio.run(save_and_continue())
                 advance_workflow()
                 st.rerun()
 
 
 # ============================================
-# STEP 4: Add Audio Tags (ElevenLabs)
+# STEP 3: Add Audio Tags (ElevenLabs) & Review
 # ============================================
 
 elif st.session_state.workflow_state == 'add_audio_tags':
     st.header("Step 4: Add ElevenLabs Audio Tags")
     st.info("💡 The AI will enhance your voiceover script with ElevenLabs audio tags for expressive speech.")
     
-    if 'scenes' not in st.session_state or not st.session_state.scenes:
-        st.error("❌ No scenes found. Please review voiceover first.")
-        if st.button("↩️ Go Back"):
-            st.session_state.workflow_state = 'review_voiceover'
-            st.rerun()
-    else:
+    if 'scenes' in st.session_state and st.session_state.scenes:
         if st.button(
-            "🎨 Add ElevenLabs Audio Tags",
+            "🎨 Add Audio Tags",
             type="primary",
             disabled=st.session_state.is_processing,
             use_container_width=True
@@ -742,82 +608,39 @@ elif st.session_state.workflow_state == 'add_audio_tags':
             
             try:
                 with st.status("Adding audio tags...", expanded=True) as status:
-                    # Get resources
                     gemini_client = get_gemini_client()
-                    elevenlabs_agent = get_elevenlabs_agent(gemini_client)
-                    session_service = st.session_state.session_service
                     
-                    st.write("🔄 Preparing runner...")
-                    runner = Runner(
-                        agent=elevenlabs_agent,
-                        app_name=st.session_state.app_name,
-                        session_service=session_service
+                    st.write("🤖 Calling Gemini API to enhance voiceover...")
+                    
+                    # Direct API call
+                    refined_scenes = add_elevenlabs_tags(
+                        gemini_client=gemini_client,
+                        scenes=st.session_state.scenes
                     )
                     
-                    st.write("🤖 Running ElevenLabs agent...")
-                    # Prepare message as Content object (required by ADK)
-                    content = Content(role='user', parts=[Part(text="Add audio tags to scenes")])
-                    
-                    # Use synchronous run() for Streamlit
-                    for event in runner.run(
-                        user_id=st.session_state.user_id,
-                        session_id=st.session_state.session_id,
-                        new_message=content  # Must be Content object
-                    ):
-                        if event.is_final_response():
-                            st.write("✅ Agent completed!")
-                    
-                    # Get updated session with refined scenes
-                    async def get_refined():
-                        session = await session_service.get_session(
-                            app_name=st.session_state.app_name,
-                            user_id=st.session_state.user_id,
-                            session_id=st.session_state.session_id
-                        )
-                        if session is None:
-                            return []
-                        return session.state.get('refined_scenes', [])
-                    
-                    refined_scenes = asyncio.run(get_refined())
                     st.session_state.refined_scenes = refined_scenes
                     
-                    st.write(f"✅ Enhanced {len(st.session_state.refined_scenes)} scenes with audio tags!")
-                    status.update(label="✅ Audio tag generation complete!", state="complete")
+                    st.write(f"✅ Enhanced {len(refined_scenes)} scenes!")
+                    status.update(label="✅ Audio tags complete!", state="complete")
                 
                 st.session_state.is_processing = False
-                advance_workflow()
+                # advance_workflow()
                 st.rerun()
                 
             except Exception as e:
                 st.session_state.is_processing = False
-                st.error(f"❌ Error adding audio tags: {str(e)}")
-                
+                st.error(f"❌ Error: {str(e)}")
                 with st.expander("🔍 Error Details"):
                     st.code(traceback.format_exc())
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🔄 Retry"):
-                        st.rerun()
-                with col2:
-                    if st.button("↩️ Go Back"):
-                        st.session_state.workflow_state = 'review_voiceover'
-                        st.rerun()
+                if st.button("🔄 Retry Audio Tags"):
+                    st.rerun()
 
 
-# ============================================
-# STEP 5: Review Final Script
-# ============================================
-
-elif st.session_state.workflow_state == 'review_final':
-    st.header("Step 5: Review Final Script with Audio Tags")
+# elif st.session_state.workflow_state == 'review_final':
+#     st.header("Step 5: Review Final Script with Audio Tags")
     
-    if 'refined_scenes' not in st.session_state or not st.session_state.refined_scenes:
-        st.error("❌ No refined scenes found. Please generate audio tags first.")
-        if st.button("↩️ Go Back"):
-            st.session_state.workflow_state = 'add_audio_tags'
-            st.rerun()
-    else:
+    if 'refined_scenes' in st.session_state and st.session_state.refined_scenes:
         st.info(f"💡 Review the final scripts with audio tags. You can edit the tags before exporting.")
         
         # Editable refined scenes
@@ -866,16 +689,6 @@ elif st.session_state.workflow_state == 'review_final':
         with col1:
             if st.button("💾 Save Final Edits", use_container_width=True):
                 st.session_state.refined_scenes = edited_refined
-                async def save_refined():
-                    session = await st.session_state.session_service.get_session(
-                        app_name=st.session_state.app_name,
-                        user_id=st.session_state.user_id,
-                        session_id=st.session_state.session_id
-                    )
-                    if session:
-                        # For InMemorySessionService, direct state modification works
-                        session.state['refined_scenes'] = edited_refined
-                asyncio.run(save_refined())
                 st.success("✅ Final edits saved!")
         
         with col2:
@@ -893,16 +706,6 @@ elif st.session_state.workflow_state == 'review_final':
             if st.button("▶️", disabled=not final_approved, use_container_width=True, type="primary"):
                 # Save before export
                 st.session_state.refined_scenes = edited_refined
-                async def save_and_export():
-                    session = await st.session_state.session_service.get_session(
-                        app_name=st.session_state.app_name,
-                        user_id=st.session_state.user_id,
-                        session_id=st.session_state.session_id
-                    )
-                    if session:
-                        # For InMemorySessionService, direct state modification works
-                        session.state['refined_scenes'] = edited_refined
-                asyncio.run(save_and_export())
                 advance_workflow()
                 st.rerun()
 
@@ -939,9 +742,7 @@ elif st.session_state.workflow_state == 'export':
             output_json = {
                 'scenes': st.session_state.refined_scenes,
                 'metadata': {
-                    'total_scenes': len(st.session_state.refined_scenes),
-                    'user_id': st.session_state.user_id,
-                    'session_id': st.session_state.session_id
+                    'total_scenes': len(st.session_state.refined_scenes)
                 }
             }
             
