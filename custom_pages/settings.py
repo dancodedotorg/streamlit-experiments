@@ -60,7 +60,7 @@ def app_page():
         try:
             flow = get_google_oauth_flow()
             auth_url, _ = flow.authorization_url(prompt='consent')
-            auth_link = f'<a href="{auth_url}" target="_self"><button style="background-color: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%;">Log in with Google</button></a>'
+            auth_link = f'<a href="{auth_url}"><button style="background-color: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%;">Log in with Google</button></a>'
             st.markdown(auth_link, unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Error setting up Google authentication: {e}")
