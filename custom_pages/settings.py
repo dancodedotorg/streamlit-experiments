@@ -28,7 +28,7 @@ def get_google_oauth_flow():
         redirect_uri=redirect_uri
     )
 
-def settings_page():
+def app_page():
 
     # ==============================
     # Handle Google OAuth Callback
@@ -79,5 +79,4 @@ def settings_page():
     if st.button("▶️ Continue to Import", width="stretch"):
         st.switch_page("custom_pages/slides_import.py")
 
-if __name__ == "__main__":
-    settings_page()
+app_page()
