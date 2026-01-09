@@ -134,9 +134,7 @@ def app_page():
                 # Decode base64 to bytes for display
                 pdf_bytes = base64.b64decode(st.session_state.pdf_base64)
                 
-                # Display PDF using iframe
-                pdf_display = f'<iframe src="data:application/pdf;base64,{st.session_state.pdf_base64}" width="100%" height="600px" type="application/pdf"></iframe>'
-                st.markdown(pdf_display, unsafe_allow_html=True)
+                st.pdf(pdf_bytes)
                 
                 # Download button
                 st.download_button(
