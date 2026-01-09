@@ -132,9 +132,8 @@ def app_page():
                 st.subheader("📄 PDF Preview")
                 
                 # Decode base64 to bytes for display
-                pdf_bytes = base64.b64decode(st.session_state.pdf_base64)
-                
-                st.pdf(pdf_bytes)
+                bytes = base64.b64decode(st.session_state.pdf_base64)
+                st.pdf(bytes, height=700)
                 
                 # Download button
                 st.download_button(

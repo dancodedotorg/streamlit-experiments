@@ -12,7 +12,8 @@ def app_page():
         col1, col2 = st.columns([3, 1])
         with col1:
             st.caption("📄 Uploaded PDF Preview:")
-            st.pdf(base64.b64decode(st.session_state.pdf_base64), width=700)
+            bytes = base64.b64decode(st.session_state.pdf_base64)
+            st.pdf(bytes, height=700)
         
         with col2:
             # Link to the next step
