@@ -1,5 +1,6 @@
 # Streamlit
-streamlit>=1.30.0
+streamlit
+streamlit[pdf]
 
 # Google Gemini AI and Auth
 google-genai
