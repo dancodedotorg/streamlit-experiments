@@ -1,14 +1,22 @@
 # Streamlit
 streamlit>=1.30.0
 
-# Google Gemini AI
-google-genai
+# Google Gemini AI and Auth
+google-generativeai
+google-auth-oauthlib
 
 # ElevenLabs SDK
 elevenlabs
 
 # Pydantic for structured outputs
 pydantic>=2.0.0
+
+# Google APIs
+google-api-python-client
+
+# PDF and HTTP utilities
+requests
+xhtml2pdf
 
 # Additional utilities
 python-dotenv
